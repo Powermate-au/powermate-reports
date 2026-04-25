@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Image from 'next/image';
 import { STAFF } from '@/lib/questions';
 import StaffPanel from './StaffPanel';
 
@@ -147,31 +146,15 @@ export default function Dashboard() {
   const activeRow = submissionsByStaff[activeStaff.id];
 
   return (
-    <div className="flex min-h-full flex-1 flex-col">
-      <header className="sticky top-0 z-50 flex h-15 items-center justify-between border-b-[3px] border-pm-orange bg-pm-navy px-4 sm:px-8 py-3">
-        <div className="flex items-center gap-3">
-          <Image
-            src="/Powermate-(Icon)(White).png"
-            alt="Powermate"
-            width={1200}
-            height={1049}
-            priority
-            className="h-9 w-auto"
-          />
-          <span className="font-condensed text-base sm:text-lg font-bold uppercase tracking-[0.08em] text-white">
-            Powermate
-          </span>
-          <div className="hidden sm:block ml-1 h-6 w-px bg-white/20" />
-          <span className="hidden sm:inline font-condensed text-sm font-bold uppercase tracking-[0.08em] text-white/70">
-            Daily Reports
-          </span>
-        </div>
-        <span className="hidden sm:inline font-mono text-xs text-white/40">
+    <main className="mx-auto w-full max-w-[1100px] flex-1 px-4 sm:px-8 py-7">
+      <div className="mb-5 flex items-baseline justify-between">
+        <h1 className="font-condensed text-2xl font-extrabold uppercase tracking-[-0.3px] text-pm-text">
+          Daily Reports
+        </h1>
+        <span className="hidden sm:inline font-mono text-xs text-pm-text-3">
           {formatLongDate(todayYmd)}
         </span>
-      </header>
-
-      <main className="mx-auto w-full max-w-[1100px] flex-1 px-4 sm:px-8 py-7">
+      </div>
         {/* KPI cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <KpiCard
@@ -317,8 +300,7 @@ export default function Dashboard() {
         ) : (
           <StaffPanel staff={activeStaff} row={activeRow} />
         )}
-      </main>
-    </div>
+    </main>
   );
 }
 

@@ -1,5 +1,5 @@
-import ReportForm from './components/ReportForm';
+import { redirect } from 'next/navigation';
 
 export default function Home() {
-  return <ReportForm />;
+  redirect('/staff');
 }

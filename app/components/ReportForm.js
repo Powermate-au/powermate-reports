@@ -1,21 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import Image from 'next/image';
 import { STAFF } from '@/lib/questions';
 import QuestionCard from './QuestionCard';
 
 function detectMode() {
   return new Date().getDay() === 5 ? 'weekly' : 'daily';
-}
-
-function formatHeaderDate(d) {
-  return d.toLocaleDateString('en-AU', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
 }
 
 export default function ReportForm() {
@@ -25,13 +15,10 @@ export default function ReportForm() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [headerDate, setHeaderDate] = useState('');
   const [isFriday, setIsFriday] = useState(false);
 
   useEffect(() => {
-    const today = new Date();
-    setHeaderDate(formatHeaderDate(today));
-    setIsFriday(today.getDay() === 5);
+    setIsFriday(new Date().getDay() === 5);
     setMode(detectMode());
   }, []);
 
@@ -167,30 +154,7 @@ export default function ReportForm() {
       : '';
 
   return (
-    <div className="flex min-h-full flex-1 flex-col">
-      <header className="sticky top-0 z-50 flex h-15 items-center justify-between border-b-[3px] border-pm-orange bg-pm-navy px-4 sm:px-8 py-3">
-        <div className="flex items-center gap-3">
-          <Image
-            src="/Powermate-(Icon)(White).png"
-            alt="Powermate"
-            width={1200}
-            height={1049}
-            priority
-            className="h-9 w-auto"
-          />
-          <span className="font-condensed text-base sm:text-lg font-bold uppercase tracking-[0.08em] text-white">
-            Powermate
-          </span>
-          <div className="hidden sm:block ml-1 h-6 w-px bg-white/20" />
-          <span className="hidden sm:inline font-condensed text-sm font-bold uppercase tracking-[0.08em] text-white/70">
-            Staff Reports
-          </span>
-        </div>
-        <span className="hidden sm:inline font-mono text-xs text-white/40">
-          {headerDate}
-        </span>
-      </header>
-
+    <div className="flex flex-1 flex-col">
       <div className="flex items-center justify-center gap-2 px-4 sm:px-8 pt-5">
         <div className="inline-flex gap-0.5 rounded-full border border-pm-border bg-pm-surface p-1">
           <button

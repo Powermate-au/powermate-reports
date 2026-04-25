@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Internal reference files (not for git)
+/*.xlsx
+/*.xls
+/docs/
+
+.claude/

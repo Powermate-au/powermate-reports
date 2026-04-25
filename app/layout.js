@@ -1,5 +1,6 @@
 import { Barlow, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
+import PasscodeGate from "./components/PasscodeGate";
 
 const barlow = Barlow({
   subsets: ["latin"],
@@ -25,7 +26,7 @@ export default function RootLayout({ children }) {
       className={`${barlow.variable} ${barlowCondensed.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-pm-bg text-pm-text font-sans">
-        {children}
+        <PasscodeGate>{children}</PasscodeGate>
       </body>
     </html>
   );

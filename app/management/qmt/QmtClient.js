@@ -430,10 +430,10 @@ export default function QmtClient() {
                   <Th onClick={() => toggleSort('customer')} active={sortKey === 'customer'} dir={sortDir}>Customer</Th>
                   <Th onClick={() => toggleSort('jobType')} active={sortKey === 'jobType'} dir={sortDir}>Type</Th>
                   <Th onClick={() => toggleSort('status')} active={sortKey === 'status'} dir={sortDir}>Status</Th>
-                  <Th onClick={() => toggleSort('estimated.invoice')} active={sortKey === 'estimated.invoice'} dir={sortDir} align="right">Invoice</Th>
+                  <Th onClick={() => toggleSort('estimated.totalRevenue')} active={sortKey === 'estimated.totalRevenue'} dir={sortDir} align="right">Revenue</Th>
                   <Th onClick={() => toggleSort('estimated.totalCost')} active={sortKey === 'estimated.totalCost'} dir={sortDir} align="right">Cost</Th>
                   <Th onClick={() => toggleSort('estimated.marginIncLabour')} active={sortKey === 'estimated.marginIncLabour'} dir={sortDir} align="right">M%</Th>
-                  <Th onClick={() => toggleSort('actual.invoice')} active={sortKey === 'actual.invoice'} dir={sortDir} align="right">Invoice</Th>
+                  <Th onClick={() => toggleSort('actual.totalRevenue')} active={sortKey === 'actual.totalRevenue'} dir={sortDir} align="right">Revenue</Th>
                   <Th onClick={() => toggleSort('actual.totalCost')} active={sortKey === 'actual.totalCost'} dir={sortDir} align="right">Cost</Th>
                   <Th onClick={() => toggleSort('actual.marginIncLabour')} active={sortKey === 'actual.marginIncLabour'} dir={sortDir} align="right">M%</Th>
                 </tr>
@@ -463,12 +463,17 @@ export default function QmtClient() {
                           {j.status}
                         </span>
                       </td>
-                      <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">{fmtMoney(j.estimated.invoice)}</td>
+                      <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">
+                        {fmtMoney(j.estimated.totalRevenue)}
+                        {j.estimated.stcValue > 0 && (
+                          <div className="text-[9px] text-pm-text-3">inv {fmtMoney(j.estimated.invoice)}</div>
+                        )}
+                      </td>
                       <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{fmtMoney(j.estimated.totalCost)}</td>
                       <td className={`px-3 py-1.5 text-right font-mono ${marginToneCls(j.estimated.marginIncLabour)}`}>
                         {fmtPct(j.estimated.marginIncLabour)}
                       </td>
-                      <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">{fmtMoney(j.actual.invoice)}</td>
+                      <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">{fmtMoney(j.actual.totalRevenue)}</td>
                       <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{fmtMoney(j.actual.totalCost)}</td>
                       <td className={`px-3 py-1.5 text-right font-mono ${marginToneCls(j.actual.marginIncLabour)}`}>
                         {fmtPct(j.actual.marginIncLabour)}

@@ -29,6 +29,19 @@ function isLabourMaterial(material) {
   return code.includes('labour') || code.includes('labor');
 }
 
+function isStcMaterial(material, lineItem) {
+  const code = (material?.item_number || '').toUpperCase();
+  if (code.includes('STC')) return true;
+  const name = (lineItem?.name || '').toUpperCase();
+  return name.includes('STC REBATE') || name.includes('BSTC REBATE');
+}
+
+function lineKind(material, lineItem) {
+  if (isLabourMaterial(material)) return 'labour';
+  if (isStcMaterial(material, lineItem)) return 'stc';
+  return 'material';
+}
+
 export async function GET(_request, { params }) {
   try {
     const { uuid } = await params;
@@ -72,7 +85,7 @@ export async function GET(_request, { params }) {
         const unitCost = num(li.cost);
         return {
           ...li,
-          _kind: isLabourMaterial(mat) ? 'labour' : 'material',
+          _kind: lineKind(mat, li),
           _itemNumber: mat?.item_number || '',
           _materialName: mat?.name || '',
           _unitPriceExGst: unitPriceEx,
@@ -101,13 +114,15 @@ export async function GET(_request, { params }) {
             acc.labourCost += li._lineCost;
             acc.labourRevenue += li._lineRevenueEx;
             acc.labourHours += li._qty;
+          } else if (li._kind === 'stc') {
+            acc.stcValue += Math.abs(li._lineRevenueEx);
           } else {
             acc.materialsCost += li._lineCost;
             acc.materialsRevenue += li._lineRevenueEx;
           }
           return acc;
         },
-        { materialsCost: 0, materialsRevenue: 0, labourCost: 0, labourRevenue: 0, labourHours: 0 },
+        { materialsCost: 0, materialsRevenue: 0, labourCost: 0, labourRevenue: 0, labourHours: 0, stcValue: 0 },
       );
       return { ...b, totals: sums };
     });
@@ -118,20 +133,22 @@ export async function GET(_request, { params }) {
       return sa - sb;
     });
 
-    // Estimated side: line items split by labour catalog
+    // Estimated side: real materials, labour and STC tracked separately
     const estTotals = activeItems.reduce(
       (acc, li) => {
         if (li._kind === 'labour') {
           acc.labour.cost += li._lineCost;
           acc.labour.revenue += li._lineRevenueEx;
           acc.labour.hours += li._qty;
+        } else if (li._kind === 'stc') {
+          acc.stcValue += Math.abs(li._lineRevenueEx);
         } else {
           acc.materials.cost += li._lineCost;
           acc.materials.revenue += li._lineRevenueEx;
         }
         return acc;
       },
-      { materials: { cost: 0, revenue: 0 }, labour: { cost: 0, revenue: 0, hours: 0 } },
+      { materials: { cost: 0, revenue: 0 }, labour: { cost: 0, revenue: 0, hours: 0 }, stcValue: 0 },
     );
 
     // Actual labour: from recorded activities × staff material rate
@@ -206,30 +223,39 @@ export async function GET(_request, { params }) {
       });
 
     // Build est/actual comparison for the drawer header
-    const buildSide = (mat, lab) => {
-      const invoice = mat.revenue + lab.revenue;
+    const buildSide = (mat, lab, stcValue) => {
+      const totalRevenue = mat.revenue + lab.revenue;
+      const invoice = totalRevenue - stcValue;
       const totalCost = mat.cost + lab.cost;
-      const gpInc = invoice - totalCost;
-      const gpEx = invoice - mat.cost;
+      const gpInc = totalRevenue - totalCost;
+      const gpEx = totalRevenue - mat.cost;
       return {
-        materials: mat,
+        materials: mat, // REAL materials (excluding STC)
+        sm8Materials: { cost: mat.cost - stcValue, revenue: mat.revenue - stcValue },
         labour: lab,
+        stcValue,
         invoice,
+        totalRevenue,
+        revenue: totalRevenue,
         totalCost,
         gpIncLabour: gpInc,
         gpExLabour: gpEx,
-        marginIncLabour: invoice > 0 ? gpInc / invoice : 0,
-        marginExLabour: invoice > 0 ? gpEx / invoice : 0,
+        marginIncLabour: totalRevenue > 0 ? gpInc / totalRevenue : 0,
+        marginExLabour: totalRevenue > 0 ? gpEx / totalRevenue : 0,
       };
     };
 
-    const estimated = buildSide(estTotals.materials, estTotals.labour);
-    const actual = buildSide(estTotals.materials, {
-      cost: actLabour.cost,
-      revenue: estTotals.labour.revenue, // labour invoice always from line items
-      hours: actLabour.hours,
-      breakdown: actLabour.breakdown,
-    });
+    const estimated = buildSide(estTotals.materials, estTotals.labour, estTotals.stcValue);
+    const actual = buildSide(
+      estTotals.materials,
+      {
+        cost: actLabour.cost,
+        revenue: estTotals.labour.revenue, // labour invoice always from line items
+        hours: actLabour.hours,
+        breakdown: actLabour.breakdown,
+      },
+      estTotals.stcValue,
+    );
 
     return NextResponse.json({
       job: { ...job, customer },

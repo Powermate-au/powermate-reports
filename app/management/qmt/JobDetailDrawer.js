@@ -131,12 +131,23 @@ export default function JobDetailDrawer({ uuid, onClose }) {
                     deltaGoodDirection="down"
                   />
                   <ComparisonRow
-                    label="Materials"
+                    label="Materials (real)"
                     estCost={data.estimated.materials.cost}
                     actCost={data.actual.materials.cost}
                     invoiced={data.estimated.materials.revenue}
                     deltaGoodDirection="down"
                   />
+                  {data.estimated.stcValue > 0 && (
+                    <tr className="border-b border-pm-border last:border-b-0 text-pm-ocean">
+                      <td className="px-4 py-2 font-medium">STC / BSTC rebate</td>
+                      <td></td>
+                      <td className="px-4 py-2 text-right font-mono border-l border-pm-border">−{fmtMoney(data.estimated.stcValue)}</td>
+                      <td className="px-4 py-2 text-right font-mono border-l border-pm-border">−{fmtMoney(data.estimated.stcValue)}</td>
+                      <td></td>
+                      <td className="px-4 py-2 text-right font-mono border-l border-pm-border">−{fmtMoney(data.estimated.stcValue)}</td>
+                      <td colSpan={2} className="px-4 py-2 text-right text-[11px] text-pm-text-3">deducted from invoice</td>
+                    </tr>
+                  )}
                   <tr className="border-t-2 border-pm-border bg-pm-bg/30 font-medium">
                     <td className="px-4 py-2.5">Total</td>
                     <td></td>
@@ -146,7 +157,14 @@ export default function JobDetailDrawer({ uuid, onClose }) {
                       {data.actual.totalCost - data.estimated.totalCost > 0 ? '+' : ''}
                       {fmtMoney(data.actual.totalCost - data.estimated.totalCost)}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono border-l border-pm-border">{fmtMoney(data.actual.invoice)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono border-l border-pm-border">
+                      {fmtMoney(data.actual.totalRevenue)}
+                      {data.actual.stcValue > 0 && (
+                        <div className="text-[10px] font-normal text-pm-text-3">
+                          inv {fmtMoney(data.actual.invoice)} + STC {fmtMoney(data.actual.stcValue)}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-right font-mono">
                       <span className="text-pm-text-3">{fmtMoney(data.estimated.gpIncLabour)}</span>
                       {' → '}

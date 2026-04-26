@@ -6,8 +6,6 @@ import {
   summariseByStatus,
   summariseByJobType,
   topLevelKpis,
-  fyForDate,
-  fyDateRange,
 } from '@/lib/qmt-calc';
 import { DEFAULT_JOB_TYPES } from '@/lib/qmt-config';
 
@@ -37,12 +35,21 @@ async function loadJobTypesFromConfig() {
   }
 }
 
+function parseDate(s) {
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const fyParam = searchParams.get('fy');
-    const fy = fyParam ? Number(fyParam) : fyForDate(new Date());
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
     const all = searchParams.get('all') === '1';
+
+    const from = parseDate(fromParam);
+    const to = parseDate(toParam);
 
     const [{ jobs, lineItems, contacts, companies }, jobTypes] = await Promise.all([
       loadAll(),
@@ -50,13 +57,14 @@ export async function GET(request) {
     ]);
 
     let filteredJobs = jobs;
-    if (!all) {
-      const { start, end } = fyDateRange(fy);
+    if (!all && (from || to)) {
       filteredJobs = jobs.filter((j) => {
         const dStr = j.date || j.quote_date || '';
         if (!dStr || dStr.startsWith('0000')) return false;
         const d = new Date(dStr.replace(' ', 'T'));
-        return d >= start && d < end;
+        if (from && d < from) return false;
+        if (to && d > to) return false;
+        return true;
       });
     }
 
@@ -70,8 +78,11 @@ export async function GET(request) {
 
     return NextResponse.json({
       generatedAt: new Date().toISOString(),
-      fy,
-      scope: all ? 'all' : `FY${String(fy).slice(-2)}`,
+      range: {
+        from: from ? from.toISOString().slice(0, 10) : null,
+        to: to ? to.toISOString().slice(0, 10) : null,
+        all,
+      },
       totalJobs: processed.length,
       kpis: topLevelKpis(processed),
       byStatus: summariseByStatus(processed),

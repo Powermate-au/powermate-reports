@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-function fmtMoney(n, dp = 2) {
+function fmtMoney(n, dp = 0) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   return n.toLocaleString('en-AU', {
     style: 'currency',
@@ -17,6 +17,11 @@ function fmtNum(n, dp = 2) {
   return Number(n).toLocaleString('en-AU', { maximumFractionDigits: dp, minimumFractionDigits: dp });
 }
 
+function fmtPct(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return `${(n * 100).toFixed(1)}%`;
+}
+
 function fmtDateTime(s) {
   if (!s || s.startsWith('0000')) return '—';
   const d = new Date(s.replace ? s.replace(' ', 'T') : s);
@@ -24,16 +29,11 @@ function fmtDateTime(s) {
   return d.toLocaleString('en-AU', { hour12: false });
 }
 
-function kindBadge(kind) {
-  switch (kind) {
-    case 'labour':
-      return <span className="rounded bg-pm-orange-bg px-1.5 py-0.5 text-[10px] font-medium uppercase text-pm-orange">Labour</span>;
-    case 'stc':
-    case 'bstc':
-      return <span className="rounded bg-pm-ocean/10 px-1.5 py-0.5 text-[10px] font-medium uppercase text-pm-ocean">{kind.toUpperCase()}</span>;
-    default:
-      return <span className="rounded bg-pm-surface-2 px-1.5 py-0.5 text-[10px] font-medium uppercase text-pm-text-2">Material</span>;
-  }
+function deltaCls(delta, goodDirection = 'up') {
+  if (delta === 0) return 'text-pm-text-3';
+  const positive = delta > 0;
+  const isGood = goodDirection === 'up' ? positive : !positive;
+  return isGood ? 'text-pm-green' : 'text-pm-red';
 }
 
 export default function JobDetailDrawer({ uuid, onClose }) {
@@ -60,15 +60,15 @@ export default function JobDetailDrawer({ uuid, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="dialog">
       <div className="absolute inset-0 bg-pm-navy/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex h-full w-full max-w-[900px] flex-col overflow-y-auto border-l border-pm-border bg-pm-bg shadow-2xl">
+      <div className="relative flex h-full w-full max-w-[1000px] flex-col overflow-y-auto border-l border-pm-border bg-pm-bg shadow-2xl">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-pm-border bg-pm-surface px-5 py-3">
           <div>
             <div className="font-condensed text-[11px] font-bold uppercase tracking-[0.1em] text-pm-text-3">
-              Job detail
+              QMT Profit Detail
             </div>
             {data && (
               <div className="text-[15px] font-medium text-pm-text">
-                #{data.job.generated_job_id} · {data.job.customer || '—'}
+                Job #{data.job.generated_job_id} · {data.job.customer || '—'}
               </div>
             )}
           </div>
@@ -96,112 +96,116 @@ export default function JobDetailDrawer({ uuid, onClose }) {
             <section className="rounded-lg border border-pm-border bg-pm-surface p-4">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[12px]">
                 <Field label="Status" value={data.job.status} />
-                <Field label="Date" value={fmtDateTime(data.job.date)} />
-                <Field label="Total invoice (SM8)" value={fmtMoney(Number(data.job.total_invoice_amount))} />
-                <Field label="Job type tag" value={data.job.job_description?.match(/\*_([a-z0-9]+)/i)?.[1] || '—'} />
+                <Field label="Quote date" value={fmtDateTime(data.job.quote_date)} />
+                <Field label="Work order date" value={fmtDateTime(data.job.work_order_date)} />
+                <Field label="Completed" value={fmtDateTime(data.job.completion_date)} />
               </div>
             </section>
 
-            {/* Bundles */}
-            <section>
-              <div className="mb-2 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
-                Bundles ({data.bundles.length})
+            {/* Est vs Actual side-by-side (QMT layout) */}
+            <section className="rounded-lg border border-pm-border bg-pm-surface overflow-hidden">
+              <div className="border-b border-pm-border px-4 py-2 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
+                Estimated vs Actual
               </div>
-              <p className="mb-3 text-[11px] text-pm-text-3">
-                ServiceM8 keeps separate bundles for the quote snapshot vs current actuals. Lowest sort_order is usually the quote.
-              </p>
-              {data.bundles.map((b, idx) => (
-                <div key={b.bundleUuid} className="mb-4 rounded-lg border border-pm-border bg-pm-surface p-4">
-                  <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                    <div>
-                      <div className="text-[13px] font-medium text-pm-text">
-                        {b.bundle?.name || (b.bundleUuid === '__loose' ? 'Loose items (no bundle)' : 'Bundle')}
-                      </div>
-                      <div className="font-mono text-[10px] text-pm-text-3">
-                        {b.bundle?.item_number ? `${b.bundle.item_number} · ` : ''}
-                        sort {b.bundle?.sort_order ?? '—'} · uuid {b.bundleUuid.slice(0, 8)}…
-                      </div>
-                    </div>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${
-                        idx === 0 ? 'bg-pm-orange-bg text-pm-orange' : 'bg-pm-ocean/10 text-pm-ocean'
-                      }`}
-                    >
-                      {idx === 0 ? 'Quote (assumed)' : 'Actual (assumed)'}
-                    </span>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-[11.5px]">
-                      <thead className="text-left text-[10px] uppercase tracking-[0.05em] text-pm-text-3">
-                        <tr className="border-b border-pm-border">
-                          <th className="py-1.5 font-medium">Item</th>
-                          <th className="py-1.5 font-medium text-right">Qty</th>
-                          <th className="py-1.5 font-medium text-right">Unit price (ex GST)</th>
-                          <th className="py-1.5 font-medium text-right">Unit cost</th>
-                          <th className="py-1.5 font-medium text-right">Line revenue</th>
-                          <th className="py-1.5 font-medium text-right">Line cost</th>
-                          <th className="py-1.5 font-medium">Tax</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {b.items.map((li) => (
-                          <tr key={li.uuid} className="border-b border-pm-border/50 last:border-b-0">
-                            <td className="py-1.5">
-                              <div className="flex items-center gap-2">
-                                {kindBadge(li._kind)}
-                                <span className="text-pm-text">{li.name}</span>
-                              </div>
-                            </td>
-                            <td className="py-1.5 text-right font-mono">{fmtNum(li._qty, 2)}</td>
-                            <td className="py-1.5 text-right font-mono">{fmtMoney(li._unitPriceExGst)}</td>
-                            <td className="py-1.5 text-right font-mono text-pm-text-3">{fmtMoney(li._unitCost)}</td>
-                            <td className="py-1.5 text-right font-mono">{fmtMoney(li._lineRevenueEx)}</td>
-                            <td className="py-1.5 text-right font-mono text-pm-text-3">{fmtMoney(li._lineCost)}</td>
-                            <td className="py-1.5 text-[10px] text-pm-text-3">
-                              {String(li.displayed_amount_is_tax_inclusive) === '1' ? 'Inc' : 'Ex'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot className="text-[11px] font-medium text-pm-text-2">
-                        <tr className="border-t border-pm-border">
-                          <td className="py-1.5">Materials</td>
-                          <td colSpan={3} className="py-1.5"></td>
-                          <td className="py-1.5 text-right font-mono">{fmtMoney(b.totals.materialsRevenue)}</td>
-                          <td className="py-1.5 text-right font-mono">{fmtMoney(b.totals.materialsCost)}</td>
-                          <td></td>
-                        </tr>
-                        <tr>
-                          <td className="py-1.5">Labour</td>
-                          <td colSpan={3}></td>
-                          <td className="py-1.5 text-right font-mono">{fmtMoney(b.totals.labourRevenue)}</td>
-                          <td className="py-1.5 text-right font-mono">{fmtMoney(b.totals.labourCost)}</td>
-                          <td></td>
-                        </tr>
-                        {b.totals.stcRebate > 0 && (
-                          <tr>
-                            <td className="py-1.5">STC/BSTC rebate</td>
-                            <td colSpan={3}></td>
-                            <td className="py-1.5 text-right font-mono text-pm-ocean">−{fmtMoney(b.totals.stcRebate)}</td>
-                            <td></td>
-                            <td></td>
-                          </tr>
-                        )}
-                      </tfoot>
-                    </table>
-                  </div>
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-pm-border bg-pm-bg/50 text-[10px] uppercase tracking-[0.05em] text-pm-text-3">
+                    <th className="px-4 py-2 text-left font-medium">Item</th>
+                    <th className="px-4 py-2 text-right font-medium">Time</th>
+                    <th className="px-4 py-2 text-right font-medium border-l border-pm-border bg-pm-orange-bg/30">Est cost</th>
+                    <th className="px-4 py-2 text-right font-medium border-l border-pm-border bg-pm-green-bg/20">Act cost</th>
+                    <th className="px-4 py-2 text-right font-medium">Δ</th>
+                    <th className="px-4 py-2 text-right font-medium border-l border-pm-border">Invoiced</th>
+                    <th className="px-4 py-2 text-right font-medium">GP</th>
+                    <th className="px-4 py-2 text-right font-medium">M%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <ComparisonRow
+                    label="Labour"
+                    estCost={data.estimated.labour.cost}
+                    actCost={data.actual.labour.cost}
+                    estTime={`${fmtNum(data.estimated.labour.hours, 1)}h`}
+                    actTime={`${fmtNum(data.actual.labour.hours, 1)}h`}
+                    invoiced={data.estimated.labour.revenue}
+                    deltaGoodDirection="down"
+                  />
+                  <ComparisonRow
+                    label="Materials"
+                    estCost={data.estimated.materials.cost}
+                    actCost={data.actual.materials.cost}
+                    invoiced={data.estimated.materials.revenue}
+                    deltaGoodDirection="down"
+                  />
+                  <tr className="border-t-2 border-pm-border bg-pm-bg/30 font-medium">
+                    <td className="px-4 py-2.5">Total</td>
+                    <td></td>
+                    <td className="px-4 py-2.5 text-right font-mono border-l border-pm-border">{fmtMoney(data.estimated.totalCost)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono border-l border-pm-border">{fmtMoney(data.actual.totalCost)}</td>
+                    <td className={`px-4 py-2.5 text-right font-mono ${deltaCls(data.actual.totalCost - data.estimated.totalCost, 'down')}`}>
+                      {data.actual.totalCost - data.estimated.totalCost > 0 ? '+' : ''}
+                      {fmtMoney(data.actual.totalCost - data.estimated.totalCost)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono border-l border-pm-border">{fmtMoney(data.actual.invoice)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      <span className="text-pm-text-3">{fmtMoney(data.estimated.gpIncLabour)}</span>
+                      {' → '}
+                      <span className="text-pm-text">{fmtMoney(data.actual.gpIncLabour)}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono">
+                      <span className="text-pm-text-3">{fmtPct(data.estimated.marginIncLabour)}</span>
+                      {' → '}
+                      <span className="text-pm-text">{fmtPct(data.actual.marginIncLabour)}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            {/* Actual labour breakdown by staff */}
+            {data.actual.labour.breakdown?.length > 0 && (
+              <section className="rounded-lg border border-pm-border bg-pm-surface p-4">
+                <div className="mb-2 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
+                  Actual labour breakdown
                 </div>
-              ))}
-            </section>
+                <table className="w-full text-[12px]">
+                  <thead className="text-left text-[10px] uppercase tracking-[0.05em] text-pm-text-3">
+                    <tr className="border-b border-pm-border">
+                      <th className="py-1.5 font-medium">Staff</th>
+                      <th className="py-1.5 font-medium">Material</th>
+                      <th className="py-1.5 font-medium text-right">Hours</th>
+                      <th className="py-1.5 font-medium text-right">Rate</th>
+                      <th className="py-1.5 font-medium text-right">Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.actual.labour.breakdown.map((b, i) => (
+                      <tr key={i} className="border-b border-pm-border/50 last:border-b-0">
+                        <td className="py-1.5">{b.staff}</td>
+                        <td className="py-1.5 text-[11px] text-pm-text-3">{b.materialName}</td>
+                        <td className="py-1.5 text-right font-mono">{fmtNum(b.hours, 2)}</td>
+                        <td className="py-1.5 text-right font-mono">{fmtMoney(b.rate, 2)}</td>
+                        <td className="py-1.5 text-right font-mono">{fmtMoney(b.cost, 2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="text-[11px] font-medium text-pm-text-2">
+                    <tr className="border-t border-pm-border">
+                      <td colSpan={2} className="py-1.5">Total</td>
+                      <td className="py-1.5 text-right font-mono">{fmtNum(data.actual.labour.hours, 2)}</td>
+                      <td></td>
+                      <td className="py-1.5 text-right font-mono">{fmtMoney(data.actual.labour.cost, 2)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </section>
+            )}
 
-            {/* Activities */}
+            {/* All recorded activities (audit trail) */}
             <section className="rounded-lg border border-pm-border bg-pm-surface p-4">
               <div className="mb-2 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
-                Timesheet activities ({data.activities.length})
+                Time entries ({data.activities.length})
               </div>
-              <p className="mb-3 text-[11px] text-pm-text-3">
-                Actual hours worked × staff hourly cost rate gives true labour cost.
-              </p>
               {data.activities.length === 0 ? (
                 <div className="text-[12px] italic text-pm-text-3">No activities recorded.</div>
               ) : (
@@ -212,35 +216,75 @@ export default function JobDetailDrawer({ uuid, onClose }) {
                       <th className="py-1.5 font-medium">Start</th>
                       <th className="py-1.5 font-medium">End</th>
                       <th className="py-1.5 font-medium text-right">Hours</th>
-                      <th className="py-1.5 font-medium text-right">Cost rate</th>
-                      <th className="py-1.5 font-medium text-right">Activity cost</th>
+                      <th className="py-1.5 font-medium">Type</th>
+                      <th className="py-1.5 font-medium text-right">Cost</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.activities.map((a) => (
-                      <tr key={a.uuid} className="border-b border-pm-border/50 last:border-b-0">
-                        <td className="py-1.5">{a._staffName || a.staff_uuid?.slice(0, 8) || '—'}</td>
+                      <tr key={a.uuid} className={`border-b border-pm-border/50 last:border-b-0 ${a.activity_was_recorded == 1 ? '' : 'opacity-50'}`}>
+                        <td className="py-1.5">{a._staffName || '—'}</td>
                         <td className="py-1.5 font-mono text-[10px] text-pm-text-3">{fmtDateTime(a.start_date)}</td>
                         <td className="py-1.5 font-mono text-[10px] text-pm-text-3">{fmtDateTime(a.end_date)}</td>
                         <td className="py-1.5 text-right font-mono">{fmtNum(a._hours, 2)}</td>
-                        <td className="py-1.5 text-right font-mono">{fmtMoney(a._hourlyCostRate)}</td>
-                        <td className="py-1.5 text-right font-mono">{fmtMoney(a._activityCost)}</td>
+                        <td className="py-1.5 text-[10px]">
+                          {a.activity_was_recorded == 1 ? (
+                            <span className="rounded bg-pm-green-bg px-1.5 py-0.5 text-pm-green">Recorded</span>
+                          ) : a.activity_was_scheduled == 1 ? (
+                            <span className="rounded bg-pm-surface-2 px-1.5 py-0.5 text-pm-text-3">Scheduled</span>
+                          ) : (
+                            <span className="text-pm-text-3">—</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 text-right font-mono">{a._activityCost > 0 ? fmtMoney(a._activityCost, 2) : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="text-[11px] font-medium text-pm-text-2">
-                    <tr className="border-t border-pm-border">
-                      <td colSpan={3} className="py-1.5">Total actual labour</td>
-                      <td className="py-1.5 text-right font-mono">{fmtNum(data.derived.activityActualHours, 2)} h</td>
-                      <td></td>
-                      <td className="py-1.5 text-right font-mono">{fmtMoney(data.derived.activityActualLabourCost)}</td>
-                    </tr>
-                  </tfoot>
                 </table>
               )}
             </section>
 
-            {/* Raw JSON expander */}
+            {/* Bundles (raw line items) */}
+            <section>
+              <div className="mb-2 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
+                Line items ({data.bundles.reduce((s, b) => s + b.items.length, 0)})
+              </div>
+              {data.bundles.map((b) => (
+                <div key={b.bundleUuid} className="mb-3 rounded-lg border border-pm-border bg-pm-surface p-4">
+                  <div className="mb-2 text-[12px] font-medium text-pm-text">
+                    {b.bundle?.name || (b.bundleUuid === '__loose' ? 'Loose items (no bundle)' : 'Bundle')}
+                  </div>
+                  <table className="w-full text-[11.5px]">
+                    <thead className="text-left text-[10px] uppercase tracking-[0.05em] text-pm-text-3">
+                      <tr className="border-b border-pm-border">
+                        <th className="py-1 font-medium">Item</th>
+                        <th className="py-1 font-medium">Code</th>
+                        <th className="py-1 font-medium text-right">Qty</th>
+                        <th className="py-1 font-medium text-right">Unit cost</th>
+                        <th className="py-1 font-medium text-right">Unit price</th>
+                        <th className="py-1 font-medium text-right">Line cost</th>
+                        <th className="py-1 font-medium text-right">Line revenue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {b.items.map((li) => (
+                        <tr key={li.uuid} className="border-b border-pm-border/50 last:border-b-0">
+                          <td className="py-1">{li.name}</td>
+                          <td className="py-1 font-mono text-[10px] text-pm-text-3">{li._itemNumber}</td>
+                          <td className="py-1 text-right font-mono">{fmtNum(li._qty, 2)}</td>
+                          <td className="py-1 text-right font-mono text-pm-text-3">{fmtMoney(li._unitCost, 2)}</td>
+                          <td className="py-1 text-right font-mono">{fmtMoney(li._unitPriceExGst, 2)}</td>
+                          <td className="py-1 text-right font-mono text-pm-text-3">{fmtMoney(li._lineCost, 0)}</td>
+                          <td className="py-1 text-right font-mono">{fmtMoney(li._lineRevenueEx, 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </section>
+
+            {/* Raw JSON */}
             <section className="rounded-lg border border-pm-border bg-pm-surface p-4">
               <button
                 type="button"
@@ -259,6 +303,28 @@ export default function JobDetailDrawer({ uuid, onClose }) {
         ) : null}
       </div>
     </div>
+  );
+}
+
+function ComparisonRow({ label, estTime, actTime, estCost, actCost, invoiced, deltaGoodDirection }) {
+  const delta = (actCost ?? 0) - (estCost ?? 0);
+  const gp = (invoiced ?? 0) - (actCost ?? 0);
+  const margin = invoiced > 0 ? gp / invoiced : 0;
+  return (
+    <tr className="border-b border-pm-border last:border-b-0">
+      <td className="px-4 py-2 font-medium text-pm-text">{label}</td>
+      <td className="px-4 py-2 text-right font-mono text-[11px] text-pm-text-3">
+        {estTime || actTime ? `${estTime || '—'} / ${actTime || '—'}` : ''}
+      </td>
+      <td className="px-4 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(estCost)}</td>
+      <td className="px-4 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(actCost)}</td>
+      <td className={`px-4 py-2 text-right font-mono ${deltaCls(delta, deltaGoodDirection)}`}>
+        {delta > 0 ? '+' : ''}{fmtMoney(delta)}
+      </td>
+      <td className="px-4 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(invoiced)}</td>
+      <td className="px-4 py-2 text-right font-mono">{fmtMoney(gp)}</td>
+      <td className="px-4 py-2 text-right font-mono">{fmtPct(margin)}</td>
+    </tr>
   );
 }
 

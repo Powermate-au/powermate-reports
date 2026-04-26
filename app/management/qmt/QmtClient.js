@@ -282,10 +282,10 @@ export default function QmtClient() {
               sub={`${data.kpis.won} won / ${data.kpis.lost} lost`}
             />
             <KpiCard
-              label="Avg margin (Inc Lab)"
-              value={fmtPct(data.kpis.avgMarginIncLabour)}
-              sub="across all quoted"
-              tone={data.kpis.avgMarginIncLabour >= 0.3 ? 'good' : data.kpis.avgMarginIncLabour >= 0.15 ? '' : 'warn'}
+              label="Avg margin Inc Lab"
+              value={`${fmtPct(data.kpis.avgEstMarginInc)} → ${fmtPct(data.kpis.avgActMarginInc)}`}
+              sub="Est → Actual"
+              tone={data.kpis.avgActMarginInc >= 0.3 ? 'good' : data.kpis.avgActMarginInc >= 0.15 ? '' : 'warn'}
             />
           </div>
 
@@ -296,13 +296,19 @@ export default function QmtClient() {
             <table className="w-full text-[12.5px]">
               <thead className="text-left text-[11px] uppercase tracking-[0.05em] text-pm-text-3">
                 <tr className="border-b border-pm-border">
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium text-right">Jobs</th>
-                  <th className="px-4 py-2 font-medium text-right">Revenue</th>
-                  <th className="px-4 py-2 font-medium text-right">GP (Inc Lab)</th>
-                  <th className="px-4 py-2 font-medium text-right">Margin (Inc Lab)</th>
-                  <th className="px-4 py-2 font-medium text-right">GP (Ex Lab)</th>
-                  <th className="px-4 py-2 font-medium text-right">Margin (Ex Lab)</th>
+                  <th className="px-3 py-2 font-medium">Status</th>
+                  <th className="px-3 py-2 font-medium text-right">Jobs</th>
+                  <th className="px-3 py-2 font-medium text-right border-l border-pm-border bg-pm-orange-bg/30" colSpan={3}>Estimated</th>
+                  <th className="px-3 py-2 font-medium text-right border-l border-pm-border bg-pm-green-bg/20" colSpan={3}>Actual</th>
+                </tr>
+                <tr className="border-b border-pm-border text-[10px]">
+                  <th colSpan={2}></th>
+                  <th className="px-3 py-1 font-medium text-right border-l border-pm-border bg-pm-orange-bg/30">Revenue</th>
+                  <th className="px-3 py-1 font-medium text-right bg-pm-orange-bg/30">GP Inc</th>
+                  <th className="px-3 py-1 font-medium text-right bg-pm-orange-bg/30">M%</th>
+                  <th className="px-3 py-1 font-medium text-right border-l border-pm-border bg-pm-green-bg/20">Revenue</th>
+                  <th className="px-3 py-1 font-medium text-right bg-pm-green-bg/20">GP Inc</th>
+                  <th className="px-3 py-1 font-medium text-right bg-pm-green-bg/20">M%</th>
                 </tr>
               </thead>
               <tbody>
@@ -313,23 +319,18 @@ export default function QmtClient() {
                   if (!r) return null;
                   return (
                     <tr key={r.status} className="border-b border-pm-border last:border-b-0">
-                      <td className="px-4 py-2">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusToneCls(r.status)}`}
-                        >
+                      <td className="px-3 py-2">
+                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusToneCls(r.status)}`}>
                           {r.status}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-right font-mono">{r.count}</td>
-                      <td className="px-4 py-2 text-right font-mono">{fmtMoney(r.revenue)}</td>
-                      <td className="px-4 py-2 text-right font-mono">{fmtMoney(r.gpIncLabour)}</td>
-                      <td className={`px-4 py-2 text-right font-mono ${marginToneCls(r.marginIncLabour)}`}>
-                        {fmtPct(r.marginIncLabour)}
-                      </td>
-                      <td className="px-4 py-2 text-right font-mono">{fmtMoney(r.gpExLabour)}</td>
-                      <td className={`px-4 py-2 text-right font-mono ${marginToneCls(r.marginExLabour, 0.5)}`}>
-                        {fmtPct(r.marginExLabour)}
-                      </td>
+                      <td className="px-3 py-2 text-right font-mono">{r.count}</td>
+                      <td className="px-3 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(r.estRevenue)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{fmtMoney(r.estGpInc)}</td>
+                      <td className={`px-3 py-2 text-right font-mono ${marginToneCls(r.estMarginInc)}`}>{fmtPct(r.estMarginInc)}</td>
+                      <td className="px-3 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(r.actRevenue)}</td>
+                      <td className="px-3 py-2 text-right font-mono">{fmtMoney(r.actGpInc)}</td>
+                      <td className={`px-3 py-2 text-right font-mono ${marginToneCls(r.actMarginInc)}`}>{fmtPct(r.actMarginInc)}</td>
                     </tr>
                   );
                 })}
@@ -344,31 +345,38 @@ export default function QmtClient() {
             <table className="w-full text-[12.5px]">
               <thead className="text-left text-[11px] uppercase tracking-[0.05em] text-pm-text-3">
                 <tr className="border-b border-pm-border">
-                  <th className="px-4 py-2 font-medium">Type</th>
-                  <th className="px-4 py-2 font-medium text-right">Quoted</th>
-                  <th className="px-4 py-2 font-medium text-right">Won</th>
-                  <th className="px-4 py-2 font-medium text-right">Lost</th>
-                  <th className="px-4 py-2 font-medium text-right">Win % (Decided)</th>
-                  <th className="px-4 py-2 font-medium text-right">Avg M (Inc Lab)</th>
-                  <th className="px-4 py-2 font-medium text-right">Avg M (Ex Lab)</th>
+                  <th className="px-3 py-2 font-medium">Type</th>
+                  <th className="px-3 py-2 font-medium text-right">Quoted</th>
+                  <th className="px-3 py-2 font-medium text-right">Won</th>
+                  <th className="px-3 py-2 font-medium text-right">Lost</th>
+                  <th className="px-3 py-2 font-medium text-right">Win % (Decided)</th>
+                  <th className="px-3 py-2 font-medium text-right border-l border-pm-border bg-pm-orange-bg/30">Est M%</th>
+                  <th className="px-3 py-2 font-medium text-right border-l border-pm-border bg-pm-green-bg/20">Act M%</th>
+                  <th className="px-3 py-2 font-medium text-right">Δ</th>
                 </tr>
               </thead>
               <tbody>
-                {data.byJobType.map((r) => (
-                  <tr key={r.tag} className="border-b border-pm-border last:border-b-0">
-                    <td className="px-4 py-2 text-pm-text">{r.label}</td>
-                    <td className="px-4 py-2 text-right font-mono">{r.totalQuoted}</td>
-                    <td className="px-4 py-2 text-right font-mono text-pm-green">{r.won}</td>
-                    <td className="px-4 py-2 text-right font-mono text-pm-red">{r.lost}</td>
-                    <td className="px-4 py-2 text-right font-mono">{fmtPct(r.winRatioDecided)}</td>
-                    <td className={`px-4 py-2 text-right font-mono ${marginToneCls(r.avgMarginIncLabour)}`}>
-                      {fmtPct(r.avgMarginIncLabour)}
-                    </td>
-                    <td className={`px-4 py-2 text-right font-mono ${marginToneCls(r.avgMarginExLabour, 0.5)}`}>
-                      {fmtPct(r.avgMarginExLabour)}
-                    </td>
-                  </tr>
-                ))}
+                {data.byJobType.map((r) => {
+                  const delta = r.actMarginInc - r.estMarginInc;
+                  return (
+                    <tr key={r.tag} className="border-b border-pm-border last:border-b-0">
+                      <td className="px-3 py-2 text-pm-text">{r.label}</td>
+                      <td className="px-3 py-2 text-right font-mono">{r.totalQuoted}</td>
+                      <td className="px-3 py-2 text-right font-mono text-pm-green">{r.won}</td>
+                      <td className="px-3 py-2 text-right font-mono text-pm-red">{r.lost}</td>
+                      <td className="px-3 py-2 text-right font-mono">{fmtPct(r.winRatioDecided)}</td>
+                      <td className={`px-3 py-2 text-right font-mono border-l border-pm-border ${marginToneCls(r.estMarginInc)}`}>
+                        {fmtPct(r.estMarginInc)}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-mono border-l border-pm-border ${marginToneCls(r.actMarginInc)}`}>
+                        {fmtPct(r.actMarginInc)}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-mono ${delta >= 0 ? 'text-pm-green' : 'text-pm-red'}`}>
+                        {delta >= 0 ? '+' : ''}{fmtPct(delta)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -412,22 +420,28 @@ export default function QmtClient() {
             <table className="w-full text-[12px]">
               <thead className="text-left text-[10px] uppercase tracking-[0.05em] text-pm-text-3">
                 <tr className="border-b border-pm-border bg-pm-bg/50">
+                  <th colSpan={5} className="px-3 py-1.5"></th>
+                  <th colSpan={3} className="px-3 py-1.5 text-center font-medium border-l border-pm-border bg-pm-orange-bg/30">Estimated</th>
+                  <th colSpan={3} className="px-3 py-1.5 text-center font-medium border-l border-pm-border bg-pm-green-bg/20">Actual</th>
+                </tr>
+                <tr className="border-b border-pm-border bg-pm-bg/50">
                   <Th onClick={() => toggleSort('date')} active={sortKey === 'date'} dir={sortDir}>Date</Th>
                   <Th onClick={() => toggleSort('jobNumber')} active={sortKey === 'jobNumber'} dir={sortDir}>Job #</Th>
                   <Th onClick={() => toggleSort('customer')} active={sortKey === 'customer'} dir={sortDir}>Customer</Th>
                   <Th onClick={() => toggleSort('jobType')} active={sortKey === 'jobType'} dir={sortDir}>Type</Th>
                   <Th onClick={() => toggleSort('status')} active={sortKey === 'status'} dir={sortDir}>Status</Th>
-                  <Th onClick={() => toggleSort('totals.revenue')} active={sortKey === 'totals.revenue'} dir={sortDir} align="right">Revenue</Th>
-                  <Th onClick={() => toggleSort('totals.totalCost')} active={sortKey === 'totals.totalCost'} dir={sortDir} align="right">Cost</Th>
-                  <Th onClick={() => toggleSort('totals.gpIncLabour')} active={sortKey === 'totals.gpIncLabour'} dir={sortDir} align="right">GP (Inc)</Th>
-                  <Th onClick={() => toggleSort('totals.marginIncLabour')} active={sortKey === 'totals.marginIncLabour'} dir={sortDir} align="right">M% (Inc)</Th>
-                  <Th onClick={() => toggleSort('totals.marginExLabour')} active={sortKey === 'totals.marginExLabour'} dir={sortDir} align="right">M% (Ex)</Th>
+                  <Th onClick={() => toggleSort('estimated.invoice')} active={sortKey === 'estimated.invoice'} dir={sortDir} align="right">Invoice</Th>
+                  <Th onClick={() => toggleSort('estimated.totalCost')} active={sortKey === 'estimated.totalCost'} dir={sortDir} align="right">Cost</Th>
+                  <Th onClick={() => toggleSort('estimated.marginIncLabour')} active={sortKey === 'estimated.marginIncLabour'} dir={sortDir} align="right">M%</Th>
+                  <Th onClick={() => toggleSort('actual.invoice')} active={sortKey === 'actual.invoice'} dir={sortDir} align="right">Invoice</Th>
+                  <Th onClick={() => toggleSort('actual.totalCost')} active={sortKey === 'actual.totalCost'} dir={sortDir} align="right">Cost</Th>
+                  <Th onClick={() => toggleSort('actual.marginIncLabour')} active={sortKey === 'actual.marginIncLabour'} dir={sortDir} align="right">M%</Th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-sm text-pm-text-3">
+                    <td colSpan={11} className="px-4 py-10 text-center text-sm text-pm-text-3">
                       No jobs match your filter.
                     </td>
                   </tr>
@@ -449,14 +463,15 @@ export default function QmtClient() {
                           {j.status}
                         </span>
                       </td>
-                      <td className="px-3 py-1.5 text-right font-mono">{fmtMoney(j.totals.revenue)}</td>
-                      <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{fmtMoney(j.totals.totalCost)}</td>
-                      <td className="px-3 py-1.5 text-right font-mono">{fmtMoney(j.totals.gpIncLabour)}</td>
-                      <td className={`px-3 py-1.5 text-right font-mono ${marginToneCls(j.totals.marginIncLabour)}`}>
-                        {fmtPct(j.totals.marginIncLabour)}
+                      <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">{fmtMoney(j.estimated.invoice)}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{fmtMoney(j.estimated.totalCost)}</td>
+                      <td className={`px-3 py-1.5 text-right font-mono ${marginToneCls(j.estimated.marginIncLabour)}`}>
+                        {fmtPct(j.estimated.marginIncLabour)}
                       </td>
-                      <td className={`px-3 py-1.5 text-right font-mono ${marginToneCls(j.totals.marginExLabour, 0.5)}`}>
-                        {fmtPct(j.totals.marginExLabour)}
+                      <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">{fmtMoney(j.actual.invoice)}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{fmtMoney(j.actual.totalCost)}</td>
+                      <td className={`px-3 py-1.5 text-right font-mono ${marginToneCls(j.actual.marginIncLabour)}`}>
+                        {fmtPct(j.actual.marginIncLabour)}
                       </td>
                     </tr>
                   ))

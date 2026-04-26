@@ -51,10 +51,10 @@ export async function GET(request) {
     const from = parseDate(fromParam);
     const to = parseDate(toParam);
 
-    const [{ jobs, lineItems, contacts, companies }, jobTypes] = await Promise.all([
-      loadAll(),
-      loadJobTypesFromConfig(),
-    ]);
+    const [
+      { jobs, lineItems, contacts, companies, materials, activities, staff },
+      jobTypes,
+    ] = await Promise.all([loadAll(), loadJobTypesFromConfig()]);
 
     let filteredJobs = jobs;
     if (!all && (from || to)) {
@@ -73,6 +73,9 @@ export async function GET(request) {
       lineItems,
       contacts,
       companies,
+      materials,
+      activities,
+      staff,
       jobTypes,
     });
 

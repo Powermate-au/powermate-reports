@@ -196,6 +196,7 @@ export default function QmtClient() {
       return buckets[k];
     };
     filtered.forEach((p) => {
+      if (p.excludedFromKpis) return; // skip *_atcost and user-excluded jobs
       const b = ensure(p.status);
       b.count += 1;
       b.revenue += p.estimated.totalRevenue;
@@ -241,19 +242,36 @@ export default function QmtClient() {
   }
 
   async function toggleExclude(job) {
+    const willExclude = !job.userExcluded;
+    // Optimistic update — flip the flag locally so UI responds instantly.
+    setData((prev) => ({
+      ...prev,
+      jobs: prev.jobs.map((j) =>
+        j.uuid === job.uuid
+          ? { ...j, userExcluded: willExclude, excludedFromKpis: j.atCost || willExclude }
+          : j,
+      ),
+    }));
     try {
-      if (job.userExcluded) {
-        await fetch(`/api/qmt/excluded?uuid=${job.uuid}`, { method: 'DELETE' });
-      } else {
-        await fetch('/api/qmt/excluded', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uuid: job.uuid, reason: '' }),
-        });
-      }
-      load();
+      const res = willExclude
+        ? await fetch('/api/qmt/excluded', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uuid: job.uuid, reason: '' }),
+          })
+        : await fetch(`/api/qmt/excluded?uuid=${job.uuid}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (e) {
-      alert(`Failed: ${e.message}`);
+      // Rollback on failure
+      setData((prev) => ({
+        ...prev,
+        jobs: prev.jobs.map((j) =>
+          j.uuid === job.uuid
+            ? { ...j, userExcluded: !willExclude, excludedFromKpis: j.atCost || !willExclude }
+            : j,
+        ),
+      }));
+      alert(`Failed to update exclusion: ${e.message}`);
     }
   }
 

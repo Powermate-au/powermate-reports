@@ -50,9 +50,22 @@ async function loadConfig() {
       range: 'Config',
     });
     const rows = (res.data.values || []).slice(1);
-    const types = rows
-      .filter((r) => r[0] === 'job_type' && r[1])
-      .map((r) => ({ tag: r[1], label: r[2] || r[1] }));
+    const typesByTag = new Map();
+    rows.forEach(([k, v, label]) => {
+      if (k === 'job_type' && v) {
+        const cur = typesByTag.get(v) || {};
+        typesByTag.set(v, { ...cur, tag: v, label: label || v });
+      } else if (k && k.startsWith('target_inc_') && k !== 'target_inc_labour' && v) {
+        const tag = k.slice('target_inc_'.length);
+        const cur = typesByTag.get(tag) || { tag, label: tag };
+        typesByTag.set(tag, { ...cur, targetInc: parseFloat(v) });
+      } else if (k && k.startsWith('target_ex_') && k !== 'target_ex_labour' && v) {
+        const tag = k.slice('target_ex_'.length);
+        const cur = typesByTag.get(tag) || { tag, label: tag };
+        typesByTag.set(tag, { ...cur, targetEx: parseFloat(v) });
+      }
+    });
+    const types = Array.from(typesByTag.values());
     const targets = {
       incLabour: DEFAULT_TARGET_INC_LABOUR,
       exLabour: DEFAULT_TARGET_EX_LABOUR,

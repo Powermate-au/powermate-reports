@@ -37,22 +37,31 @@ async function ensureTab(sheets) {
 //   job_type | solar    | Solar
 //   root_cause | Poor Estimating | (label unused)
 function parseRows(rows) {
-  const jobTypes = [];
+  const jobTypesByTag = new Map();
   const rootCauses = [];
   const targets = {};
   rows.forEach(([key, value, label]) => {
     if (!key) return;
     if (key === 'job_type' && value) {
-      jobTypes.push({ tag: value, label: label || value });
+      const existing = jobTypesByTag.get(value) || {};
+      jobTypesByTag.set(value, { ...existing, tag: value, label: label || value });
     } else if (key === 'root_cause' && value) {
       rootCauses.push(value);
     } else if (key === 'target_inc_labour' && value) {
       targets.incLabour = parseFloat(value);
     } else if (key === 'target_ex_labour' && value) {
       targets.exLabour = parseFloat(value);
+    } else if (key.startsWith('target_inc_') && value) {
+      const tag = key.slice('target_inc_'.length);
+      const existing = jobTypesByTag.get(tag) || { tag, label: tag };
+      jobTypesByTag.set(tag, { ...existing, targetInc: parseFloat(value) });
+    } else if (key.startsWith('target_ex_') && value) {
+      const tag = key.slice('target_ex_'.length);
+      const existing = jobTypesByTag.get(tag) || { tag, label: tag };
+      jobTypesByTag.set(tag, { ...existing, targetEx: parseFloat(value) });
     }
   });
-  return { jobTypes, rootCauses, targets };
+  return { jobTypes: Array.from(jobTypesByTag.values()), rootCauses, targets };
 }
 
 export async function GET() {
@@ -83,7 +92,14 @@ export async function PUT(request) {
 
     const values = [['key', 'value', 'label']];
     jobTypes.forEach((t) => {
-      if (t?.tag) values.push(['job_type', t.tag, t.label || t.tag]);
+      if (!t?.tag) return;
+      values.push(['job_type', t.tag, t.label || t.tag]);
+      if (Number.isFinite(t.targetInc)) {
+        values.push([`target_inc_${t.tag}`, String(t.targetInc), '']);
+      }
+      if (Number.isFinite(t.targetEx)) {
+        values.push([`target_ex_${t.tag}`, String(t.targetEx), '']);
+      }
     });
     rootCauses.forEach((c) => {
       if (c) values.push(['root_cause', c, '']);

@@ -70,6 +70,13 @@ export default function SettingsClient() {
     setJobTypes(jobTypes.map((t) => (t.tag === tag ? { ...t, label } : t)));
   }
 
+  function updateJobTypeTarget(tag, field, pct) {
+    const v = pct === '' || isNaN(Number(pct)) ? undefined : Number(pct) / 100;
+    setJobTypes(
+      jobTypes.map((t) => (t.tag === tag ? { ...t, [field]: v } : t)),
+    );
+  }
+
   function addRootCause() {
     const v = newCause.trim();
     if (!v || rootCauses.includes(v)) return;
@@ -168,7 +175,7 @@ export default function SettingsClient() {
 
             <div className="flex flex-col gap-1.5">
               {jobTypes.map((t) => (
-                <div key={t.tag} className="flex items-center gap-2 rounded-md border border-pm-border bg-pm-bg px-3 py-2">
+                <div key={t.tag} className="flex flex-wrap items-center gap-2 rounded-md border border-pm-border bg-pm-bg px-3 py-2">
                   <code className="min-w-[110px] font-mono text-[12px] text-pm-orange">
                     {TAG_PREFIX}{t.tag}
                   </code>
@@ -176,8 +183,32 @@ export default function SettingsClient() {
                     type="text"
                     value={t.label}
                     onChange={(e) => updateJobTypeLabel(t.tag, e.target.value)}
-                    className="flex-1 rounded border border-pm-border-2 bg-pm-surface px-2 py-1 text-[13px] text-pm-text outline-none focus:border-pm-orange"
+                    className="flex-1 min-w-[140px] rounded border border-pm-border-2 bg-pm-surface px-2 py-1 text-[13px] text-pm-text outline-none focus:border-pm-orange"
                   />
+                  <label className="flex items-center gap-1 text-[11px] text-pm-text-3" title="Inc Labour target (blank = use global)">
+                    Inc
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="—"
+                      value={Number.isFinite(t.targetInc) ? (t.targetInc * 100).toFixed(1) : ''}
+                      onChange={(e) => updateJobTypeTarget(t.tag, 'targetInc', e.target.value)}
+                      className="w-14 rounded border border-pm-border-2 bg-pm-surface px-1.5 py-1 text-right text-[12px] text-pm-text outline-none focus:border-pm-orange"
+                    />
+                    <span>%</span>
+                  </label>
+                  <label className="flex items-center gap-1 text-[11px] text-pm-text-3" title="Ex Labour target (blank = use global)">
+                    Ex
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="—"
+                      value={Number.isFinite(t.targetEx) ? (t.targetEx * 100).toFixed(1) : ''}
+                      onChange={(e) => updateJobTypeTarget(t.tag, 'targetEx', e.target.value)}
+                      className="w-14 rounded border border-pm-border-2 bg-pm-surface px-1.5 py-1 text-right text-[12px] text-pm-text outline-none focus:border-pm-orange"
+                    />
+                    <span>%</span>
+                  </label>
                   <button
                     type="button"
                     onClick={() => removeJobType(t.tag)}

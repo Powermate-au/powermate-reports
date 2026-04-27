@@ -178,6 +178,18 @@ export default function QmtClient() {
   // Filter-aware analysis window aggregation. Recomputes from filtered list
   // so the summary respects status/jobType/search filters.
   const summary = useMemo(() => {
+    const globalIncTarget = data?.targets?.incLabour ?? 0.425;
+    const globalExTarget = data?.targets?.exLabour ?? 0.593;
+    const targetByTag = new Map();
+    (data?.jobTypes || []).forEach((t) => {
+      targetByTag.set(t.tag, {
+        inc: Number.isFinite(t.targetInc) ? t.targetInc : globalIncTarget,
+        ex: Number.isFinite(t.targetEx) ? t.targetEx : globalExTarget,
+      });
+    });
+    const targetsFor = (tag) =>
+      targetByTag.get(tag) || { inc: globalIncTarget, ex: globalExTarget };
+
     const buckets = {};
     const ensure = (k) => {
       if (!buckets[k]) {
@@ -191,26 +203,35 @@ export default function QmtClient() {
           gpIncAct: 0,
           gpExAct: 0,
           actCount: 0,
+          // Revenue-weighted target accumulators
+          twIncSum: 0,
+          twExSum: 0,
+          twActIncSum: 0,
+          twActExSum: 0,
         };
       }
       return buckets[k];
     };
     filtered.forEach((p) => {
-      if (p.excludedFromKpis) return; // skip *_atcost and user-excluded jobs
+      if (p.excludedFromKpis) return;
       const b = ensure(p.status);
+      const tgt = targetsFor(p.jobType);
       b.count += 1;
       b.revenue += p.estimated.totalRevenue;
       b.gpIncEst += p.estimated.gpIncLabour;
       b.gpExEst += p.estimated.gpExLabour;
+      b.twIncSum += tgt.inc * p.estimated.totalRevenue;
+      b.twExSum += tgt.ex * p.estimated.totalRevenue;
       if (p.actual) {
         b.actCount += 1;
         b.actRevenue += p.actual.totalRevenue;
         b.gpIncAct += p.actual.gpIncLabour;
         b.gpExAct += p.actual.gpExLabour;
+        b.twActIncSum += tgt.inc * p.actual.totalRevenue;
+        b.twActExSum += tgt.ex * p.actual.totalRevenue;
       }
     });
     const rows = STATUS_ORDER.map((s) => buckets[s]).filter(Boolean);
-    // Compute Total
     const total = rows.reduce(
       (acc, b) => {
         acc.count += b.count;
@@ -221,12 +242,30 @@ export default function QmtClient() {
         acc.gpIncAct += b.gpIncAct;
         acc.gpExAct += b.gpExAct;
         acc.actCount += b.actCount;
+        acc.twIncSum += b.twIncSum;
+        acc.twExSum += b.twExSum;
+        acc.twActIncSum += b.twActIncSum;
+        acc.twActExSum += b.twActExSum;
         return acc;
       },
-      { status: 'Total', count: 0, revenue: 0, actRevenue: 0, gpIncEst: 0, gpExEst: 0, gpIncAct: 0, gpExAct: 0, actCount: 0 },
+      {
+        status: 'Total',
+        count: 0,
+        revenue: 0,
+        actRevenue: 0,
+        gpIncEst: 0,
+        gpExEst: 0,
+        gpIncAct: 0,
+        gpExAct: 0,
+        actCount: 0,
+        twIncSum: 0,
+        twExSum: 0,
+        twActIncSum: 0,
+        twActExSum: 0,
+      },
     );
     return { rows, total };
-  }, [filtered]);
+  }, [filtered, data]);
 
   function toggleSort(key) {
     if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -662,13 +701,23 @@ function AnalysisWindow({ summary, viewMode, setViewMode, targets, filterCaption
   const variance = (margin, target) =>
     margin === null || margin === undefined ? null : margin - target;
 
-  // Build display rows per status + Total
+  // Build display rows per status + Total. Targets are revenue-weighted from
+  // the per-job-type targets; falls back to global if a type has none set.
   const rowFor = (b) => {
     const hasActuals = b.status === 'Work Order' || b.status === 'Completed' || b.status === 'Total';
-    // In Actual view, Quote/Unsuccessful have no real actuals — show — rather
-    // than silently falling back to estimated values.
     if (isActual && !hasActuals) {
-      return { ...b, revenueShown: null, gpInc: null, gpEx: null, mInc: null, mEx: null, hasActuals, showActual: false };
+      return {
+        ...b,
+        revenueShown: null,
+        gpInc: null,
+        gpEx: null,
+        mInc: null,
+        mEx: null,
+        targetInc: null,
+        targetEx: null,
+        hasActuals,
+        showActual: false,
+      };
     }
     const showActual = isActual && hasActuals;
     const denom = showActual ? b.actRevenue : b.revenue;
@@ -676,7 +725,11 @@ function AnalysisWindow({ summary, viewMode, setViewMode, targets, filterCaption
     const gpEx = showActual ? b.gpExAct : b.gpExEst;
     const mInc = denom > 0 ? gpInc / denom : null;
     const mEx = denom > 0 ? gpEx / denom : null;
-    return { ...b, revenueShown: denom, gpInc, gpEx, mInc, mEx, hasActuals, showActual };
+    const tIncSum = showActual ? b.twActIncSum : b.twIncSum;
+    const tExSum = showActual ? b.twActExSum : b.twExSum;
+    const targetInc = denom > 0 ? tIncSum / denom : (targets?.incLabour ?? null);
+    const targetEx = denom > 0 ? tExSum / denom : (targets?.exLabour ?? null);
+    return { ...b, revenueShown: denom, gpInc, gpEx, mInc, mEx, targetInc, targetEx, hasActuals, showActual };
   };
 
   const rows = summary.rows.map(rowFor);
@@ -743,8 +796,11 @@ function AnalysisWindow({ summary, viewMode, setViewMode, targets, filterCaption
 }
 
 function AnalysisRow({ r, targets, variance, isTotal }) {
-  const vInc = variance(r.mInc, targets.incLabour);
-  const vEx = variance(r.mEx, targets.exLabour);
+  // Per-row weighted target falls back to global if missing
+  const tInc = r.targetInc ?? targets.incLabour;
+  const tEx = r.targetEx ?? targets.exLabour;
+  const vInc = variance(r.mInc, tInc);
+  const vEx = variance(r.mEx, tEx);
   const cls = isTotal ? 'border-t-2 border-pm-border bg-pm-bg/30 font-medium' : 'border-b border-pm-border last:border-b-0';
   const vClass = (v) =>
     v === null || v === undefined ? 'text-pm-text-3' : v >= 0 ? 'text-pm-green' : 'text-pm-red';
@@ -764,18 +820,18 @@ function AnalysisRow({ r, targets, variance, isTotal }) {
       <td className="px-3 py-2 text-right font-mono">
         {r.revenueShown > 0 ? fmtMoney(r.revenueShown) : '—'}
       </td>
-      <td className="px-3 py-2 text-right font-mono text-pm-text-3">{fmtPct(targets.incLabour)}</td>
+      <td className="px-3 py-2 text-right font-mono text-pm-text-3">{tInc === null ? '—' : fmtPct(tInc)}</td>
       <td className="px-3 py-2 text-right font-mono">{r.mInc === null ? '—' : fmtMoney(r.gpInc)}</td>
-      <td className={`px-3 py-2 text-right font-mono ${marginToneCls(r.mInc, targets.incLabour)}`}>
+      <td className={`px-3 py-2 text-right font-mono ${marginToneCls(r.mInc, tInc)}`}>
         {r.mInc === null ? '—' : (
           <span>
             {fmtPct(r.mInc)} <span className={`text-[10px] ${vClass(vInc)}`}>{vTxt(vInc)}</span>
           </span>
         )}
       </td>
-      <td className="px-3 py-2 text-right font-mono text-pm-text-3 border-l border-pm-border">{fmtPct(targets.exLabour)}</td>
+      <td className="px-3 py-2 text-right font-mono text-pm-text-3 border-l border-pm-border">{tEx === null ? '—' : fmtPct(tEx)}</td>
       <td className="px-3 py-2 text-right font-mono">{r.mEx === null ? '—' : fmtMoney(r.gpEx)}</td>
-      <td className={`px-3 py-2 text-right font-mono ${marginToneCls(r.mEx, targets.exLabour)}`}>
+      <td className={`px-3 py-2 text-right font-mono ${marginToneCls(r.mEx, tEx)}`}>
         {r.mEx === null ? '—' : (
           <span>
             {fmtPct(r.mEx)} <span className={`text-[10px] ${vClass(vEx)}`}>{vTxt(vEx)}</span>

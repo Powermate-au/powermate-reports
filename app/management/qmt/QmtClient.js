@@ -118,7 +118,7 @@ export default function QmtClient() {
   const [viewMode, setViewMode] = useState('actual'); // 'actual' | 'estimated'
   const [testMode, setTestMode] = useState(false);
 
-  async function load() {
+  async function load({ fresh = false } = {}) {
     setLoading(true);
     setError(null);
     try {
@@ -129,6 +129,7 @@ export default function QmtClient() {
         if (range.to) params.set('to', range.to);
       }
       if (testMode) params.set('test', '1');
+      if (fresh) params.set('fresh', '1');
       const res = await fetch(`/api/qmt?${params.toString()}`);
       if (!res.ok) {
         const t = await res.text().catch(() => '');
@@ -357,8 +358,9 @@ export default function QmtClient() {
           </button>
           <button
             type="button"
-            onClick={load}
+            onClick={() => load({ fresh: true })}
             disabled={loading}
+            title="Force a fresh pull from ServiceM8 (bypasses cache)"
             className="rounded-md border border-pm-border-2 bg-transparent px-4 py-1.5 text-[13px] font-medium text-pm-text-2 transition-colors hover:bg-pm-surface-2 hover:text-pm-text disabled:opacity-50"
           >
             ↻ Refresh

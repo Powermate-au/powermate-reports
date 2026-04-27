@@ -102,6 +102,7 @@ export async function GET(request) {
     const toParam = searchParams.get('to');
     const all = searchParams.get('all') === '1';
     const testMode = searchParams.get('test') === '1';
+    const fresh = searchParams.get('fresh') === '1';
 
     const from = parseDate(fromParam);
     const to = parseDate(toParam);
@@ -110,7 +111,7 @@ export async function GET(request) {
       { jobs, lineItems, contacts, companies, materials, activities, staff },
       config,
       excludedUuids,
-    ] = await Promise.all([loadAll(), loadConfig(), loadExcludedUuids()]);
+    ] = await Promise.all([loadAll({ fresh }), loadConfig(), loadExcludedUuids()]);
     const { jobTypes, targets } = config;
 
     let filteredJobs = jobs;

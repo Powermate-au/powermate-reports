@@ -534,22 +534,18 @@ function AnalysisWindow({ summary, viewMode, setViewMode, targets, filterCaption
   // Build display rows per status + Total
   const rowFor = (b) => {
     const hasActuals = b.status === 'Work Order' || b.status === 'Completed' || b.status === 'Total';
+    // In Actual view, Quote/Unsuccessful have no real actuals — show — rather
+    // than silently falling back to estimated values.
+    if (isActual && !hasActuals) {
+      return { ...b, revenueShown: null, gpInc: null, gpEx: null, mInc: null, mEx: null, hasActuals, showActual: false };
+    }
     const showActual = isActual && hasActuals;
     const denom = showActual ? b.actRevenue : b.revenue;
     const gpInc = showActual ? b.gpIncAct : b.gpIncEst;
     const gpEx = showActual ? b.gpExAct : b.gpExEst;
     const mInc = denom > 0 ? gpInc / denom : null;
     const mEx = denom > 0 ? gpEx / denom : null;
-    return {
-      ...b,
-      revenueShown: denom,
-      gpInc,
-      gpEx,
-      mInc,
-      mEx,
-      hasActuals,
-      showActual,
-    };
+    return { ...b, revenueShown: denom, gpInc, gpEx, mInc, mEx, hasActuals, showActual };
   };
 
   const rows = summary.rows.map(rowFor);

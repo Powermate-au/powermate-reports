@@ -128,7 +128,6 @@ export default function QmtClient() {
         if (range.from) params.set('from', range.from);
         if (range.to) params.set('to', range.to);
       }
-      if (testMode) params.set('test', '1');
       if (fresh) params.set('fresh', '1');
       const res = await fetch(`/api/qmt?${params.toString()}`);
       if (!res.ok) {
@@ -147,11 +146,12 @@ export default function QmtClient() {
 
   useEffect(() => {
     load();
-  }, [range.from, range.to, range.all, testMode]);
+  }, [range.from, range.to, range.all]);
 
   const filtered = useMemo(() => {
     if (!data?.jobs) return [];
     let rows = data.jobs;
+    if (testMode) rows = rows.filter((r) => /\*_test\b/i.test(r.description || ''));
     if (filter.statuses.length > 0) rows = rows.filter((r) => filter.statuses.includes(r.status));
     if (filter.jobTypes.length > 0) rows = rows.filter((r) => filter.jobTypes.includes(r.jobType));
     if (filter.excludedOnly) rows = rows.filter((r) => r.excludedFromKpis);
@@ -175,7 +175,7 @@ export default function QmtClient() {
       return av > bv ? dir : -dir;
     });
     return rows;
-  }, [data, filter, sortKey, sortDir]);
+  }, [data, filter, sortKey, sortDir, testMode]);
 
   // Filter-aware analysis window aggregation. Recomputes from filtered list
   // so the summary respects status/jobType/search filters.

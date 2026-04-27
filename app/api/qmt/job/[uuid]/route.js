@@ -229,6 +229,8 @@ export async function GET(_request, { params }) {
       const totalCost = mat.cost + lab.cost;
       const gpInc = totalRevenue - totalCost;
       const gpEx = totalRevenue - mat.cost;
+      const labourHours = lab.hours || 0;
+      const dollarsPerHour = labourHours > 0 ? gpEx / labourHours : null;
       return {
         materials: mat, // REAL materials (excluding STC)
         sm8Materials: { cost: mat.cost - stcValue, revenue: mat.revenue - stcValue },
@@ -242,6 +244,7 @@ export async function GET(_request, { params }) {
         gpExLabour: gpEx,
         marginIncLabour: totalRevenue > 0 ? gpInc / totalRevenue : 0,
         marginExLabour: totalRevenue > 0 ? gpEx / totalRevenue : 0,
+        dollarsPerHour,
       };
     };
 

@@ -22,6 +22,11 @@ function fmtPct(n) {
   return `${(n * 100).toFixed(1)}%`;
 }
 
+function fmtPerHour(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return `${n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })}/hr`;
+}
+
 function fmtDateTime(s) {
   if (!s || s.startsWith('0000')) return '—';
   const d = new Date(s.replace ? s.replace(' ', 'T') : s);
@@ -118,6 +123,7 @@ export default function JobDetailDrawer({ uuid, onClose }) {
                     <th className="px-4 py-2 text-right font-medium border-l border-pm-border">Invoiced</th>
                     <th className="px-4 py-2 text-right font-medium">GP</th>
                     <th className="px-4 py-2 text-right font-medium">M%</th>
+                    <th className="px-4 py-2 text-right font-medium border-l border-pm-border">$/hr</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -146,6 +152,7 @@ export default function JobDetailDrawer({ uuid, onClose }) {
                       <td></td>
                       <td className="px-4 py-2 text-right font-mono border-l border-pm-border">−{fmtMoney(data.estimated.stcValue)}</td>
                       <td colSpan={2} className="px-4 py-2 text-right text-[11px] text-pm-text-3">deducted from invoice</td>
+                      <td className="px-4 py-2 border-l border-pm-border"></td>
                     </tr>
                   )}
                   <tr className="border-t-2 border-pm-border bg-pm-bg/30 font-medium">
@@ -183,6 +190,15 @@ export default function JobDetailDrawer({ uuid, onClose }) {
                         <>
                           {' → '}
                           <span className="text-pm-text">{fmtPct(data.actual.marginIncLabour)}</span>
+                        </>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-mono border-l border-pm-border">
+                      <span className="text-pm-text-3">{fmtPerHour(data.estimated.dollarsPerHour)}</span>
+                      {data.actual && (
+                        <>
+                          {' → '}
+                          <span className="text-pm-text">{fmtPerHour(data.actual.dollarsPerHour)}</span>
                         </>
                       )}
                     </td>
@@ -355,6 +371,7 @@ function ComparisonRow({ label, estTime, actTime, estCost, actCost, invoiced, de
       <td className="px-4 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(invoiced)}</td>
       <td className="px-4 py-2 text-right font-mono">{fmtMoney(gp)}</td>
       <td className="px-4 py-2 text-right font-mono">{fmtPct(margin)}</td>
+      <td className="px-4 py-2 text-right font-mono border-l border-pm-border text-pm-text-3">—</td>
     </tr>
   );
 }

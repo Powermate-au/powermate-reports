@@ -19,6 +19,11 @@ function fmtPct(n) {
   return `${(n * 100).toFixed(1)}%`;
 }
 
+function fmtPerHour(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return `${n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })}/hr`;
+}
+
 function fmtDate(s) {
   if (!s) return '—';
   const d = new Date(s.replace ? s.replace(' ', 'T') : s);
@@ -205,6 +210,8 @@ export default function QmtClient() {
           gpIncAct: 0,
           gpExAct: 0,
           actCount: 0,
+          estHours: 0,
+          actHours: 0,
           // Revenue-weighted target accumulators
           twIncSum: 0,
           twExSum: 0,
@@ -222,6 +229,7 @@ export default function QmtClient() {
       b.revenue += p.estimated.totalRevenue;
       b.gpIncEst += p.estimated.gpIncLabour;
       b.gpExEst += p.estimated.gpExLabour;
+      b.estHours += p.estimated.labour.hours || 0;
       b.twIncSum += tgt.inc * p.estimated.totalRevenue;
       b.twExSum += tgt.ex * p.estimated.totalRevenue;
       if (p.actual) {
@@ -229,6 +237,7 @@ export default function QmtClient() {
         b.actRevenue += p.actual.totalRevenue;
         b.gpIncAct += p.actual.gpIncLabour;
         b.gpExAct += p.actual.gpExLabour;
+        b.actHours += p.actual.labour.hours || 0;
         b.twActIncSum += tgt.inc * p.actual.totalRevenue;
         b.twActExSum += tgt.ex * p.actual.totalRevenue;
       }
@@ -244,6 +253,8 @@ export default function QmtClient() {
         acc.gpIncAct += b.gpIncAct;
         acc.gpExAct += b.gpExAct;
         acc.actCount += b.actCount;
+        acc.estHours += b.estHours;
+        acc.actHours += b.actHours;
         acc.twIncSum += b.twIncSum;
         acc.twExSum += b.twExSum;
         acc.twActIncSum += b.twActIncSum;
@@ -260,6 +271,8 @@ export default function QmtClient() {
         gpIncAct: 0,
         gpExAct: 0,
         actCount: 0,
+        estHours: 0,
+        actHours: 0,
         twIncSum: 0,
         twExSum: 0,
         twActIncSum: 0,
@@ -414,7 +427,7 @@ export default function QmtClient() {
         </div>
       ) : data ? (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
             <KpiCard label="Total quoted value" value={fmtMoney(data.kpis.totalQuotedValue)} sub={`${data.kpis.total} jobs`} />
             <KpiCard
               label="Won value"
@@ -432,6 +445,18 @@ export default function QmtClient() {
               value={`${fmtPct(data.kpis.avgEstMarginInc)} → ${fmtPct(data.kpis.avgActMarginInc)}`}
               sub="Est → Actual"
               tone={data.kpis.avgActMarginInc >= 0.3 ? 'good' : data.kpis.avgActMarginInc >= 0.15 ? '' : 'warn'}
+            />
+            <KpiCard
+              label="Avg profit / hour"
+              value={`${fmtPerHour(data.kpis.avgEstDollarsPerHour)} → ${fmtPerHour(data.kpis.avgActDollarsPerHour)}`}
+              sub="Est → Actual (GP Ex Lab ÷ hours)"
+              tone={
+                data.kpis.avgActDollarsPerHour >= 100
+                  ? 'good'
+                  : data.kpis.avgActDollarsPerHour >= 50
+                  ? ''
+                  : 'warn'
+              }
             />
           </div>
 
@@ -498,6 +523,7 @@ export default function QmtClient() {
                   <th colSpan={3} className="px-3 py-1.5 text-center font-medium border-l border-pm-border bg-pm-green-bg/20">Actual</th>
                   <th className="px-3 py-1.5"></th>
                   <th className="px-3 py-1.5"></th>
+                  <th className="px-3 py-1.5"></th>
                 </tr>
                 <tr className="border-b border-pm-border bg-pm-bg/50">
                   <Th onClick={() => toggleSort('date')} active={sortKey === 'date'} dir={sortDir}>Date</Th>
@@ -512,13 +538,14 @@ export default function QmtClient() {
                   <Th onClick={() => toggleSort('actual.totalCost')} active={sortKey === 'actual.totalCost'} dir={sortDir} align="right">Cost</Th>
                   <Th onClick={() => toggleSort('actual.marginIncLabour')} active={sortKey === 'actual.marginIncLabour'} dir={sortDir} align="right">M%</Th>
                   <th className="px-3 py-2 font-medium text-right border-l border-pm-border">M% Δ</th>
+                  <th className="px-3 py-2 font-medium text-right border-l border-pm-border">$/hr</th>
                   <th className="px-3 py-2 font-medium text-right" title="Exclude from KPIs">⊘</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={13} className="px-4 py-10 text-center text-sm text-pm-text-3">
+                    <td colSpan={14} className="px-4 py-10 text-center text-sm text-pm-text-3">
                       No jobs match your filter.
                     </td>
                   </tr>
@@ -575,6 +602,14 @@ export default function QmtClient() {
                           }`}
                         >
                           {delta === null ? '—' : `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}%`}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">
+                          {(() => {
+                            const side = j.actual || j.estimated;
+                            return side?.dollarsPerHour === null || side?.dollarsPerHour === undefined
+                              ? '—'
+                              : fmtPerHour(side.dollarsPerHour);
+                          })()}
                         </td>
                         <td className="px-3 py-1.5 text-right">
                           <button
@@ -739,6 +774,7 @@ function AnalysisWindow({ summary, viewMode, setViewMode, targets, filterCaption
         mEx: null,
         targetInc: null,
         targetEx: null,
+        dollarsPerHour: null,
         hasActuals,
         showActual: false,
       };
@@ -747,13 +783,15 @@ function AnalysisWindow({ summary, viewMode, setViewMode, targets, filterCaption
     const denom = showActual ? b.actRevenue : b.revenue;
     const gpInc = showActual ? b.gpIncAct : b.gpIncEst;
     const gpEx = showActual ? b.gpExAct : b.gpExEst;
+    const hours = showActual ? b.actHours : b.estHours;
     const mInc = denom > 0 ? gpInc / denom : null;
     const mEx = denom > 0 ? gpEx / denom : null;
     const tIncSum = showActual ? b.twActIncSum : b.twIncSum;
     const tExSum = showActual ? b.twActExSum : b.twExSum;
     const targetInc = denom > 0 ? tIncSum / denom : (targets?.incLabour ?? null);
     const targetEx = denom > 0 ? tExSum / denom : (targets?.exLabour ?? null);
-    return { ...b, revenueShown: denom, gpInc, gpEx, mInc, mEx, targetInc, targetEx, hasActuals, showActual };
+    const dollarsPerHour = hours > 0 ? gpEx / hours : null;
+    return { ...b, revenueShown: denom, gpInc, gpEx, mInc, mEx, targetInc, targetEx, dollarsPerHour, hasActuals, showActual };
   };
 
   const rows = summary.rows.map(rowFor);
@@ -803,6 +841,7 @@ function AnalysisWindow({ summary, viewMode, setViewMode, targets, filterCaption
               <th className="px-3 py-2 font-medium text-right border-l border-pm-border">Target Ex</th>
               <th className="px-3 py-2 font-medium text-right">GP Ex Lab</th>
               <th className="px-3 py-2 font-medium text-right">M% Ex Lab</th>
+              <th className="px-3 py-2 font-medium text-right border-l border-pm-border">$/hr</th>
             </tr>
           </thead>
           <tbody>
@@ -861,6 +900,9 @@ function AnalysisRow({ r, targets, variance, isTotal }) {
             {fmtPct(r.mEx)} <span className={`text-[10px] ${vClass(vEx)}`}>{vTxt(vEx)}</span>
           </span>
         )}
+      </td>
+      <td className="px-3 py-2 text-right font-mono border-l border-pm-border">
+        {r.dollarsPerHour === null ? '—' : fmtPerHour(r.dollarsPerHour)}
       </td>
     </tr>
   );

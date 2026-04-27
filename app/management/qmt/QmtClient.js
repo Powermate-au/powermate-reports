@@ -240,6 +240,23 @@ export default function QmtClient() {
     setRange({ ...r, preset: id });
   }
 
+  async function toggleExclude(job) {
+    try {
+      if (job.userExcluded) {
+        await fetch(`/api/qmt/excluded?uuid=${job.uuid}`, { method: 'DELETE' });
+      } else {
+        await fetch('/api/qmt/excluded', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uuid: job.uuid, reason: '' }),
+        });
+      }
+      load();
+    } catch (e) {
+      alert(`Failed: ${e.message}`);
+    }
+  }
+
   function setCustomDate(field, value) {
     setRange({ ...range, [field]: value, all: false, preset: 'custom' });
   }
@@ -400,6 +417,8 @@ export default function QmtClient() {
                   <th colSpan={5} className="px-3 py-1.5"></th>
                   <th colSpan={3} className="px-3 py-1.5 text-center font-medium border-l border-pm-border bg-pm-orange-bg/30">Estimated</th>
                   <th colSpan={3} className="px-3 py-1.5 text-center font-medium border-l border-pm-border bg-pm-green-bg/20">Actual</th>
+                  <th className="px-3 py-1.5"></th>
+                  <th className="px-3 py-1.5"></th>
                 </tr>
                 <tr className="border-b border-pm-border bg-pm-bg/50">
                   <Th onClick={() => toggleSort('date')} active={sortKey === 'date'} dir={sortDir}>Date</Th>
@@ -413,50 +432,88 @@ export default function QmtClient() {
                   <Th onClick={() => toggleSort('actual.totalRevenue')} active={sortKey === 'actual.totalRevenue'} dir={sortDir} align="right">Revenue</Th>
                   <Th onClick={() => toggleSort('actual.totalCost')} active={sortKey === 'actual.totalCost'} dir={sortDir} align="right">Cost</Th>
                   <Th onClick={() => toggleSort('actual.marginIncLabour')} active={sortKey === 'actual.marginIncLabour'} dir={sortDir} align="right">M%</Th>
+                  <th className="px-3 py-2 font-medium text-right border-l border-pm-border">M% Δ</th>
+                  <th className="px-3 py-2 font-medium text-right" title="Exclude from KPIs">⊘</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="px-4 py-10 text-center text-sm text-pm-text-3">
+                    <td colSpan={13} className="px-4 py-10 text-center text-sm text-pm-text-3">
                       No jobs match your filter.
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((j) => (
-                    <tr
-                      key={j.uuid}
-                      onClick={() => setOpenJobUuid(j.uuid)}
-                      className="cursor-pointer border-b border-pm-border last:border-b-0 hover:bg-pm-orange-bg/30"
-                    >
-                      <td className="px-3 py-1.5 font-mono text-[11px] text-pm-text-3">{fmtDate(j.date)}</td>
-                      <td className="px-3 py-1.5 font-mono text-[11px] text-pm-orange">{j.jobNumber || j.po || '—'}</td>
-                      <td className="px-3 py-1.5 max-w-[200px] truncate" title={j.customer}>{j.customer || '—'}</td>
-                      <td className="px-3 py-1.5 text-[11px] text-pm-text-2">
-                        {data.jobTypes.find((t) => t.tag === j.jobType)?.label || j.jobType}
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusToneCls(j.status)}`}>
-                          {j.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">
-                        {fmtMoney(j.estimated.totalRevenue)}
-                        {j.estimated.stcValue > 0 && (
-                          <div className="text-[9px] text-pm-text-3">inv {fmtMoney(j.estimated.invoice)}</div>
-                        )}
-                      </td>
-                      <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{fmtMoney(j.estimated.totalCost)}</td>
-                      <td className={`px-3 py-1.5 text-right font-mono ${marginToneCls(j.estimated.marginIncLabour)}`}>
-                        {fmtPct(j.estimated.marginIncLabour)}
-                      </td>
-                      <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">{j.actual ? fmtMoney(j.actual.totalRevenue) : '—'}</td>
-                      <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{j.actual ? fmtMoney(j.actual.totalCost) : '—'}</td>
-                      <td className={`px-3 py-1.5 text-right font-mono ${j.actual ? marginToneCls(j.actual.marginIncLabour) : 'text-pm-text-3'}`}>
-                        {j.actual ? fmtPct(j.actual.marginIncLabour) : '—'}
-                      </td>
-                    </tr>
-                  ))
+                  filtered.map((j) => {
+                    const delta =
+                      j.actual && j.estimated
+                        ? j.actual.marginIncLabour - j.estimated.marginIncLabour
+                        : null;
+                    return (
+                      <tr
+                        key={j.uuid}
+                        onClick={() => setOpenJobUuid(j.uuid)}
+                        className={`cursor-pointer border-b border-pm-border last:border-b-0 hover:bg-pm-orange-bg/30 ${
+                          j.userExcluded ? 'opacity-50 line-through decoration-pm-text-3/50' : ''
+                        }`}
+                      >
+                        <td className="px-3 py-1.5 font-mono text-[11px] text-pm-text-3">{fmtDate(j.date)}</td>
+                        <td className="px-3 py-1.5 font-mono text-[11px] text-pm-orange">
+                          {j.jobNumber || j.po || '—'}
+                          {j.atCost && (
+                            <span className="ml-1 rounded bg-pm-ocean/15 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wider text-pm-ocean no-underline">
+                              At cost
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-1.5 max-w-[200px] truncate" title={j.customer}>{j.customer || '—'}</td>
+                        <td className="px-3 py-1.5 text-[11px] text-pm-text-2">
+                          {data.jobTypes.find((t) => t.tag === j.jobType)?.label || j.jobType}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusToneCls(j.status)}`}>
+                            {j.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">
+                          {fmtMoney(j.estimated.totalRevenue)}
+                          {j.estimated.stcValue > 0 && (
+                            <div className="text-[9px] text-pm-text-3 no-underline">inv {fmtMoney(j.estimated.invoice)}</div>
+                          )}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{fmtMoney(j.estimated.totalCost)}</td>
+                        <td className={`px-3 py-1.5 text-right font-mono ${marginToneCls(j.estimated.marginIncLabour)}`}>
+                          {fmtPct(j.estimated.marginIncLabour)}
+                        </td>
+                        <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">{j.actual ? fmtMoney(j.actual.totalRevenue) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{j.actual ? fmtMoney(j.actual.totalCost) : '—'}</td>
+                        <td className={`px-3 py-1.5 text-right font-mono ${j.actual ? marginToneCls(j.actual.marginIncLabour) : 'text-pm-text-3'}`}>
+                          {j.actual ? fmtPct(j.actual.marginIncLabour) : '—'}
+                        </td>
+                        <td
+                          className={`px-3 py-1.5 text-right font-mono border-l border-pm-border ${
+                            delta === null ? 'text-pm-text-3' : delta >= 0 ? 'text-pm-green' : 'text-pm-red'
+                          }`}
+                        >
+                          {delta === null ? '—' : `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}%`}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); toggleExclude(j); }}
+                            title={j.userExcluded ? 'Click to include' : 'Exclude from KPIs'}
+                            className={`rounded px-1.5 py-0.5 text-[11px] no-underline ${
+                              j.userExcluded
+                                ? 'bg-pm-red-bg text-pm-red'
+                                : 'text-pm-text-3 hover:bg-pm-surface-2 hover:text-pm-text'
+                            }`}
+                          >
+                            {j.userExcluded ? '✗' : '⊘'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

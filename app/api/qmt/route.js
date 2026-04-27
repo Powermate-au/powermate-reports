@@ -15,6 +15,26 @@ import {
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
+async function loadExcludedUuids() {
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'QMT Excluded',
+    });
+    return (res.data.values || []).slice(1).map((r) => r[0]).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
 async function loadConfig() {
   try {
     const auth = new google.auth.GoogleAuth({
@@ -76,7 +96,8 @@ export async function GET(request) {
     const [
       { jobs, lineItems, contacts, companies, materials, activities, staff },
       config,
-    ] = await Promise.all([loadAll(), loadConfig()]);
+      excludedUuids,
+    ] = await Promise.all([loadAll(), loadConfig(), loadExcludedUuids()]);
     const { jobTypes, targets } = config;
 
     let filteredJobs = jobs;
@@ -105,6 +126,7 @@ export async function GET(request) {
       activities,
       staff,
       jobTypes,
+      excludedUuids,
     });
 
     return NextResponse.json({

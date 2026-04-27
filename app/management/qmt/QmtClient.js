@@ -111,7 +111,7 @@ export default function QmtClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [range, setRange] = useState(() => ({ ...presetRange('thisMonth'), preset: 'thisMonth' }));
-  const [filter, setFilter] = useState({ statuses: [], jobTypes: [], search: '' });
+  const [filter, setFilter] = useState({ statuses: [], jobTypes: [], search: '', excludedOnly: false });
   const [sortKey, setSortKey] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
   const [openJobUuid, setOpenJobUuid] = useState(null);
@@ -153,6 +153,7 @@ export default function QmtClient() {
     let rows = data.jobs;
     if (filter.statuses.length > 0) rows = rows.filter((r) => filter.statuses.includes(r.status));
     if (filter.jobTypes.length > 0) rows = rows.filter((r) => filter.jobTypes.includes(r.jobType));
+    if (filter.excludedOnly) rows = rows.filter((r) => r.excludedFromKpis);
     if (filter.search) {
       const q = filter.search.toLowerCase();
       rows = rows.filter(
@@ -437,7 +438,14 @@ export default function QmtClient() {
             viewMode={viewMode}
             setViewMode={setViewMode}
             targets={data.targets || { incLabour: 0.425, exLabour: 0.593 }}
-            filterCaption={buildFilterCaption({ data, filter, range, testMode, count: filtered.length })}
+            filterCaption={buildFilterCaption({
+              data,
+              filter,
+              range,
+              testMode,
+              count: filtered.length,
+              excludedCount: filtered.filter((j) => j.excludedFromKpis).length,
+            })}
           />
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -464,6 +472,18 @@ export default function QmtClient() {
               onChange={(e) => setFilter({ ...filter, search: e.target.value })}
               className="flex-1 min-w-[200px] rounded-md border border-pm-border-2 bg-pm-surface px-3 py-1 text-[12px] text-pm-text"
             />
+            <button
+              type="button"
+              onClick={() => setFilter({ ...filter, excludedOnly: !filter.excludedOnly })}
+              title="Show only jobs excluded from KPIs (*_atcost or manually toggled)"
+              className={`rounded-md border px-3 py-1 text-[12px] transition-colors ${
+                filter.excludedOnly
+                  ? 'border-pm-red bg-pm-red-bg text-pm-red'
+                  : 'border-pm-border-2 bg-pm-surface text-pm-text-2 hover:bg-pm-surface-2 hover:text-pm-text'
+              }`}
+            >
+              {filter.excludedOnly ? '⊘ Excluded only' : '⊘ Excluded'}
+            </button>
             <span className="text-[11px] text-pm-text-3">Showing {filtered.length}</span>
           </div>
 
@@ -679,10 +699,12 @@ function MultiSelect({ label, options, selected, onChange }) {
   );
 }
 
-function buildFilterCaption({ data, filter, range, testMode, count }) {
+function buildFilterCaption({ data, filter, range, testMode, count, excludedCount }) {
   const parts = [];
   if (testMode) parts.push('Test mode (*_test)');
   parts.push(`${count} job${count === 1 ? '' : 's'}`);
+  if (excludedCount > 0 && !filter.excludedOnly) parts.push(`${excludedCount} excluded`);
+  if (filter.excludedOnly) parts.push('Excluded only');
   if (filter.statuses.length > 0) parts.push(filter.statuses.join(', '));
   if (filter.jobTypes.length > 0) {
     const labels = filter.jobTypes.map(

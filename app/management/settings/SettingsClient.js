@@ -17,6 +17,40 @@ function slugify(s) {
     .slice(0, 24);
 }
 
+// Number-as-percentage input: holds local string state so users can type
+// freely without toFixed reformatting eating their keystrokes. Commits the
+// numeric value (decimal, e.g. 0.425 for 42.5%) on blur.
+function PercentInput({ value, onChange, placeholder = '—', className = '' }) {
+  const initial = Number.isFinite(value) ? (value * 100).toFixed(1) : '';
+  const [text, setText] = useState(initial);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) {
+      setText(Number.isFinite(value) ? (value * 100).toFixed(1) : '');
+    }
+  }, [value, focused]);
+  return (
+    <input
+      type="number"
+      step="0.1"
+      placeholder={placeholder}
+      value={text}
+      onFocus={() => setFocused(true)}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        setFocused(false);
+        const t = text.trim();
+        if (t === '') onChange(undefined);
+        else {
+          const n = parseFloat(t);
+          onChange(Number.isFinite(n) ? n / 100 : undefined);
+        }
+      }}
+      className={className}
+    />
+  );
+}
+
 export default function SettingsClient() {
   const [jobTypes, setJobTypes] = useState([]);
   const [rootCauses, setRootCauses] = useState([]);
@@ -148,22 +182,18 @@ export default function SettingsClient() {
             <div className="flex flex-wrap items-center gap-4">
               <label className="flex items-center gap-2 text-[13px] text-pm-text-2">
                 <span className="font-medium">Inc Labour</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={(targets.incLabour * 100).toFixed(1)}
-                  onChange={(e) => setTargets({ ...targets, incLabour: Number(e.target.value) / 100 })}
+                <PercentInput
+                  value={targets.incLabour}
+                  onChange={(v) => setTargets({ ...targets, incLabour: v ?? DEFAULT_TARGET_INC_LABOUR })}
                   className="w-20 rounded border border-pm-border-2 bg-pm-bg px-2 py-1 text-right text-[13px] text-pm-text outline-none focus:border-pm-orange"
                 />
                 <span>%</span>
               </label>
               <label className="flex items-center gap-2 text-[13px] text-pm-text-2">
                 <span className="font-medium">Ex Labour</span>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={(targets.exLabour * 100).toFixed(1)}
-                  onChange={(e) => setTargets({ ...targets, exLabour: Number(e.target.value) / 100 })}
+                <PercentInput
+                  value={targets.exLabour}
+                  onChange={(v) => setTargets({ ...targets, exLabour: v ?? DEFAULT_TARGET_EX_LABOUR })}
                   className="w-20 rounded border border-pm-border-2 bg-pm-bg px-2 py-1 text-right text-[13px] text-pm-text outline-none focus:border-pm-orange"
                 />
                 <span>%</span>
@@ -207,24 +237,22 @@ export default function SettingsClient() {
                   />
                   <label className="flex items-center gap-1 text-[11px] text-pm-text-3" title="Inc Labour target (blank = use global)">
                     Inc
-                    <input
-                      type="number"
-                      step="0.1"
-                      placeholder="—"
-                      value={Number.isFinite(t.targetInc) ? (t.targetInc * 100).toFixed(1) : ''}
-                      onChange={(e) => updateJobTypeTarget(t.tag, 'targetInc', e.target.value)}
+                    <PercentInput
+                      value={t.targetInc}
+                      onChange={(v) =>
+                        setJobTypes(jobTypes.map((x) => (x.tag === t.tag ? { ...x, targetInc: v } : x)))
+                      }
                       className="w-14 rounded border border-pm-border-2 bg-pm-surface px-1.5 py-1 text-right text-[12px] text-pm-text outline-none focus:border-pm-orange"
                     />
                     <span>%</span>
                   </label>
                   <label className="flex items-center gap-1 text-[11px] text-pm-text-3" title="Ex Labour target (blank = use global)">
                     Ex
-                    <input
-                      type="number"
-                      step="0.1"
-                      placeholder="—"
-                      value={Number.isFinite(t.targetEx) ? (t.targetEx * 100).toFixed(1) : ''}
-                      onChange={(e) => updateJobTypeTarget(t.tag, 'targetEx', e.target.value)}
+                    <PercentInput
+                      value={t.targetEx}
+                      onChange={(v) =>
+                        setJobTypes(jobTypes.map((x) => (x.tag === t.tag ? { ...x, targetEx: v } : x)))
+                      }
                       className="w-14 rounded border border-pm-border-2 bg-pm-surface px-1.5 py-1 text-right text-[12px] text-pm-text outline-none focus:border-pm-orange"
                     />
                     <span>%</span>

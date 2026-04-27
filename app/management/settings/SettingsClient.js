@@ -130,11 +130,21 @@ export default function SettingsClient() {
         <>
           <section className="mb-5 rounded-lg border border-pm-border bg-pm-surface p-5">
             <div className="mb-1 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
-              Margin targets
+              Margin targets — global defaults
             </div>
-            <p className="mb-3 text-[12px] text-pm-text-3">
-              Used by the QMT analysis window to colour-code performance vs target.
-            </p>
+            <div className="mb-3 space-y-1.5 text-[12px] text-pm-text-3">
+              <p>
+                These are the <strong className="text-pm-text-2">fallback</strong> targets the
+                QMT Summary Analysis uses when comparing actual margins to your goal — green when at or above target, red when below.
+              </p>
+              <p>
+                <strong className="text-pm-text-2">Inc Labour</strong> treats labour as a cost; <strong className="text-pm-text-2">Ex Labour</strong> excludes it (so labour hours show up as profit).
+              </p>
+              <p>
+                Set per-type overrides on each Job type row below — they take priority over these globals when a job has that tag.
+                The Summary Analysis blends them into a revenue-weighted target per row, so a row that's mostly battery jobs will compare against a lower target than a row of electrical jobs.
+              </p>
+            </div>
             <div className="flex flex-wrap items-center gap-4">
               <label className="flex items-center gap-2 text-[13px] text-pm-text-2">
                 <span className="font-medium">Inc Labour</span>
@@ -165,13 +175,23 @@ export default function SettingsClient() {
             <div className="mb-1 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
               Job type tags
             </div>
-            <p className="mb-3 text-[12px] text-pm-text-3">
-              Tags are matched against ServiceM8 job descriptions in the format{' '}
-              <code className="rounded bg-pm-surface-2 px-1 py-0.5 text-[11px]">
-                {TAG_PREFIX}tag
-              </code>{' '}
-              (e.g. <code className="rounded bg-pm-surface-2 px-1 py-0.5 text-[11px]">{TAG_PREFIX}solar</code>).
-            </p>
+            <div className="mb-3 space-y-1.5 text-[12px] text-pm-text-3">
+              <p>
+                Add a tag like{' '}
+                <code className="rounded bg-pm-surface-2 px-1 py-0.5 text-[11px]">{TAG_PREFIX}solar</code>{' '}
+                anywhere in a ServiceM8 job description to classify it. The QMT uses this to filter, group and report on jobs by type.
+              </p>
+              <p>
+                Each row's <strong className="text-pm-text-2">Inc</strong> and <strong className="text-pm-text-2">Ex</strong> targets override the global margin targets for that type only — leave blank to use the global. Useful when material-heavy job types (e.g. battery) need a lower margin target than labour-heavy types (e.g. electrical).
+              </p>
+              <p>
+                Two reserved tags are recognised even if not listed here:{' '}
+                <code className="rounded bg-pm-surface-2 px-1 py-0.5 text-[11px]">{TAG_PREFIX}atcost</code>{' '}
+                excludes a job from KPI averages (badge shown on its row), and{' '}
+                <code className="rounded bg-pm-surface-2 px-1 py-0.5 text-[11px]">{TAG_PREFIX}test</code>{' '}
+                scopes the QMT to a hand-picked test set when Test mode is on.
+              </p>
+            </div>
 
             <div className="flex flex-col gap-1.5">
               {jobTypes.map((t) => (

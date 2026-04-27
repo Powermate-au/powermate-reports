@@ -317,6 +317,7 @@ export default function QmtClient() {
                 ).map((statusName) => {
                   const r = data.byStatus.find((s) => s.status === statusName);
                   if (!r) return null;
+                  const hasActuals = r.status === 'Work Order' || r.status === 'Completed';
                   return (
                     <tr key={r.status} className="border-b border-pm-border last:border-b-0">
                       <td className="px-3 py-2">
@@ -328,9 +329,9 @@ export default function QmtClient() {
                       <td className="px-3 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(r.estRevenue)}</td>
                       <td className="px-3 py-2 text-right font-mono">{fmtMoney(r.estGpInc)}</td>
                       <td className={`px-3 py-2 text-right font-mono ${marginToneCls(r.estMarginInc)}`}>{fmtPct(r.estMarginInc)}</td>
-                      <td className="px-3 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(r.actRevenue)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{fmtMoney(r.actGpInc)}</td>
-                      <td className={`px-3 py-2 text-right font-mono ${marginToneCls(r.actMarginInc)}`}>{fmtPct(r.actMarginInc)}</td>
+                      <td className="px-3 py-2 text-right font-mono border-l border-pm-border">{hasActuals ? fmtMoney(r.actRevenue) : '—'}</td>
+                      <td className="px-3 py-2 text-right font-mono">{hasActuals ? fmtMoney(r.actGpInc) : '—'}</td>
+                      <td className={`px-3 py-2 text-right font-mono ${hasActuals ? marginToneCls(r.actMarginInc) : 'text-pm-text-3'}`}>{hasActuals ? fmtPct(r.actMarginInc) : '—'}</td>
                     </tr>
                   );
                 })}
@@ -473,10 +474,10 @@ export default function QmtClient() {
                       <td className={`px-3 py-1.5 text-right font-mono ${marginToneCls(j.estimated.marginIncLabour)}`}>
                         {fmtPct(j.estimated.marginIncLabour)}
                       </td>
-                      <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">{fmtMoney(j.actual.totalRevenue)}</td>
-                      <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{fmtMoney(j.actual.totalCost)}</td>
-                      <td className={`px-3 py-1.5 text-right font-mono ${marginToneCls(j.actual.marginIncLabour)}`}>
-                        {fmtPct(j.actual.marginIncLabour)}
+                      <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">{j.actual ? fmtMoney(j.actual.totalRevenue) : '—'}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{j.actual ? fmtMoney(j.actual.totalCost) : '—'}</td>
+                      <td className={`px-3 py-1.5 text-right font-mono ${j.actual ? marginToneCls(j.actual.marginIncLabour) : 'text-pm-text-3'}`}>
+                        {j.actual ? fmtPct(j.actual.marginIncLabour) : '—'}
                       </td>
                     </tr>
                   ))

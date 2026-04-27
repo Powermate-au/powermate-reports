@@ -105,7 +105,7 @@ export default function JobDetailDrawer({ uuid, onClose }) {
             {/* Est vs Actual side-by-side (QMT layout) */}
             <section className="rounded-lg border border-pm-border bg-pm-surface overflow-hidden">
               <div className="border-b border-pm-border px-4 py-2 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
-                Estimated vs Actual
+                {data.actual ? 'Estimated vs Actual' : 'Estimated (no actuals — job not started)'}
               </div>
               <table className="w-full text-[13px]">
                 <thead>
@@ -124,16 +124,16 @@ export default function JobDetailDrawer({ uuid, onClose }) {
                   <ComparisonRow
                     label="Labour"
                     estCost={data.estimated.labour.cost}
-                    actCost={data.actual.labour.cost}
+                    actCost={data.actual?.labour.cost}
                     estTime={`${fmtNum(data.estimated.labour.hours, 1)}h`}
-                    actTime={`${fmtNum(data.actual.labour.hours, 1)}h`}
+                    actTime={data.actual ? `${fmtNum(data.actual.labour.hours, 1)}h` : null}
                     invoiced={data.estimated.labour.revenue}
                     deltaGoodDirection="down"
                   />
                   <ComparisonRow
                     label="Materials (real)"
                     estCost={data.estimated.materials.cost}
-                    actCost={data.actual.materials.cost}
+                    actCost={data.actual?.materials.cost}
                     invoiced={data.estimated.materials.revenue}
                     deltaGoodDirection="down"
                   />
@@ -152,28 +152,39 @@ export default function JobDetailDrawer({ uuid, onClose }) {
                     <td className="px-4 py-2.5">Total</td>
                     <td></td>
                     <td className="px-4 py-2.5 text-right font-mono border-l border-pm-border">{fmtMoney(data.estimated.totalCost)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono border-l border-pm-border">{fmtMoney(data.actual.totalCost)}</td>
-                    <td className={`px-4 py-2.5 text-right font-mono ${deltaCls(data.actual.totalCost - data.estimated.totalCost, 'down')}`}>
-                      {data.actual.totalCost - data.estimated.totalCost > 0 ? '+' : ''}
-                      {fmtMoney(data.actual.totalCost - data.estimated.totalCost)}
+                    <td className="px-4 py-2.5 text-right font-mono border-l border-pm-border">
+                      {data.actual ? fmtMoney(data.actual.totalCost) : '—'}
+                    </td>
+                    <td className={`px-4 py-2.5 text-right font-mono ${data.actual ? deltaCls(data.actual.totalCost - data.estimated.totalCost, 'down') : 'text-pm-text-3'}`}>
+                      {data.actual
+                        ? `${data.actual.totalCost - data.estimated.totalCost > 0 ? '+' : ''}${fmtMoney(data.actual.totalCost - data.estimated.totalCost)}`
+                        : '—'}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono border-l border-pm-border">
-                      {fmtMoney(data.actual.totalRevenue)}
-                      {data.actual.stcValue > 0 && (
+                      {fmtMoney((data.actual || data.estimated).totalRevenue)}
+                      {data.estimated.stcValue > 0 && (
                         <div className="text-[10px] font-normal text-pm-text-3">
-                          inv {fmtMoney(data.actual.invoice)} + STC {fmtMoney(data.actual.stcValue)}
+                          inv {fmtMoney((data.actual || data.estimated).invoice)} + STC {fmtMoney(data.estimated.stcValue)}
                         </div>
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono">
                       <span className="text-pm-text-3">{fmtMoney(data.estimated.gpIncLabour)}</span>
-                      {' → '}
-                      <span className="text-pm-text">{fmtMoney(data.actual.gpIncLabour)}</span>
+                      {data.actual && (
+                        <>
+                          {' → '}
+                          <span className="text-pm-text">{fmtMoney(data.actual.gpIncLabour)}</span>
+                        </>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono">
                       <span className="text-pm-text-3">{fmtPct(data.estimated.marginIncLabour)}</span>
-                      {' → '}
-                      <span className="text-pm-text">{fmtPct(data.actual.marginIncLabour)}</span>
+                      {data.actual && (
+                        <>
+                          {' → '}
+                          <span className="text-pm-text">{fmtPct(data.actual.marginIncLabour)}</span>
+                        </>
+                      )}
                     </td>
                   </tr>
                 </tbody>
@@ -181,7 +192,7 @@ export default function JobDetailDrawer({ uuid, onClose }) {
             </section>
 
             {/* Actual labour breakdown by staff */}
-            {data.actual.labour.breakdown?.length > 0 && (
+            {data.actual?.labour.breakdown?.length > 0 && (
               <section className="rounded-lg border border-pm-border bg-pm-surface p-4">
                 <div className="mb-2 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
                   Actual labour breakdown
@@ -325,8 +336,10 @@ export default function JobDetailDrawer({ uuid, onClose }) {
 }
 
 function ComparisonRow({ label, estTime, actTime, estCost, actCost, invoiced, deltaGoodDirection }) {
-  const delta = (actCost ?? 0) - (estCost ?? 0);
-  const gp = (invoiced ?? 0) - (actCost ?? 0);
+  const hasAct = actCost !== null && actCost !== undefined;
+  const delta = hasAct ? actCost - (estCost ?? 0) : null;
+  const costForGp = hasAct ? actCost : (estCost ?? 0);
+  const gp = (invoiced ?? 0) - costForGp;
   const margin = invoiced > 0 ? gp / invoiced : 0;
   return (
     <tr className="border-b border-pm-border last:border-b-0">
@@ -335,9 +348,9 @@ function ComparisonRow({ label, estTime, actTime, estCost, actCost, invoiced, de
         {estTime || actTime ? `${estTime || '—'} / ${actTime || '—'}` : ''}
       </td>
       <td className="px-4 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(estCost)}</td>
-      <td className="px-4 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(actCost)}</td>
-      <td className={`px-4 py-2 text-right font-mono ${deltaCls(delta, deltaGoodDirection)}`}>
-        {delta > 0 ? '+' : ''}{fmtMoney(delta)}
+      <td className="px-4 py-2 text-right font-mono border-l border-pm-border">{hasAct ? fmtMoney(actCost) : '—'}</td>
+      <td className={`px-4 py-2 text-right font-mono ${hasAct ? deltaCls(delta, deltaGoodDirection) : 'text-pm-text-3'}`}>
+        {hasAct ? `${delta > 0 ? '+' : ''}${fmtMoney(delta)}` : '—'}
       </td>
       <td className="px-4 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(invoiced)}</td>
       <td className="px-4 py-2 text-right font-mono">{fmtMoney(gp)}</td>

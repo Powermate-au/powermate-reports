@@ -246,16 +246,19 @@ export async function GET(_request, { params }) {
     };
 
     const estimated = buildSide(estTotals.materials, estTotals.labour, estTotals.stcValue);
-    const actual = buildSide(
-      estTotals.materials,
-      {
-        cost: actLabour.cost,
-        revenue: estTotals.labour.revenue, // labour invoice always from line items
-        hours: actLabour.hours,
-        breakdown: actLabour.breakdown,
-      },
-      estTotals.stcValue,
-    );
+    const hasActuals = job.status === 'Work Order' || job.status === 'Completed';
+    const actual = hasActuals
+      ? buildSide(
+          estTotals.materials,
+          {
+            cost: actLabour.cost,
+            revenue: estTotals.labour.revenue,
+            hours: actLabour.hours,
+            breakdown: actLabour.breakdown,
+          },
+          estTotals.stcValue,
+        )
+      : null;
 
     return NextResponse.json({
       job: { ...job, customer },

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import JobDetailDrawer from './JobDetailDrawer';
 
 const STATUS_ORDER = ['Quote', 'Work Order', 'Completed', 'Unsuccessful'];
@@ -111,7 +111,7 @@ export default function QmtClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [range, setRange] = useState(() => ({ ...presetRange('thisMonth'), preset: 'thisMonth' }));
-  const [filter, setFilter] = useState({ status: 'All', jobType: 'All', search: '' });
+  const [filter, setFilter] = useState({ statuses: [], jobTypes: [], search: '' });
   const [sortKey, setSortKey] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
   const [openJobUuid, setOpenJobUuid] = useState(null);
@@ -151,8 +151,8 @@ export default function QmtClient() {
   const filtered = useMemo(() => {
     if (!data?.jobs) return [];
     let rows = data.jobs;
-    if (filter.status !== 'All') rows = rows.filter((r) => r.status === filter.status);
-    if (filter.jobType !== 'All') rows = rows.filter((r) => r.jobType === filter.jobType);
+    if (filter.statuses.length > 0) rows = rows.filter((r) => filter.statuses.includes(r.status));
+    if (filter.jobTypes.length > 0) rows = rows.filter((r) => filter.jobTypes.includes(r.jobType));
     if (filter.search) {
       const q = filter.search.toLowerCase();
       rows = rows.filter(
@@ -368,29 +368,21 @@ export default function QmtClient() {
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-[11px] uppercase tracking-[0.05em] text-pm-text-3">Filter:</span>
-            <select
-              value={filter.status}
-              onChange={(e) => setFilter({ ...filter, status: e.target.value })}
-              className="rounded-md border border-pm-border-2 bg-pm-surface px-2 py-1 text-[12px] text-pm-text"
-            >
-              <option>All</option>
-              {STATUS_ORDER.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
-            <select
-              value={filter.jobType}
-              onChange={(e) => setFilter({ ...filter, jobType: e.target.value })}
-              className="rounded-md border border-pm-border-2 bg-pm-surface px-2 py-1 text-[12px] text-pm-text"
-            >
-              <option value="All">All types</option>
-              {data.jobTypes.map((t) => (
-                <option key={t.tag} value={t.tag}>
-                  {t.label}
-                </option>
-              ))}
-              <option value="untagged">Untagged</option>
-            </select>
+            <MultiSelect
+              label="Status"
+              options={STATUS_ORDER.map((s) => ({ value: s, label: s }))}
+              selected={filter.statuses}
+              onChange={(next) => setFilter({ ...filter, statuses: next })}
+            />
+            <MultiSelect
+              label="Type"
+              options={[
+                ...data.jobTypes.map((t) => ({ value: t.tag, label: t.label })),
+                { value: 'untagged', label: 'Untagged' },
+              ]}
+              selected={filter.jobTypes}
+              onChange={(next) => setFilter({ ...filter, jobTypes: next })}
+            />
             <input
               type="text"
               placeholder="Search customer / job # / PO…"
@@ -511,14 +503,78 @@ function Th({ children, onClick, active, dir, align = 'left' }) {
   );
 }
 
+function MultiSelect({ label, options, selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    function onDoc(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  function toggle(v) {
+    onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
+  }
+
+  const summary = selected.length === 0 ? `All ${label.toLowerCase()}` : `${label} (${selected.length})`;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`rounded-md border bg-pm-surface px-3 py-1 text-[12px] text-pm-text transition-colors ${
+          selected.length > 0 ? 'border-pm-orange text-pm-orange' : 'border-pm-border-2'
+        }`}
+      >
+        {summary} ▾
+      </button>
+      {open && (
+        <div className="absolute left-0 z-20 mt-1 max-h-64 w-56 overflow-y-auto rounded-md border border-pm-border bg-pm-surface shadow-lg">
+          {selected.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="block w-full border-b border-pm-border px-3 py-1.5 text-left text-[11px] text-pm-text-3 hover:bg-pm-surface-2 hover:text-pm-text"
+            >
+              Clear all
+            </button>
+          )}
+          {options.map((opt) => {
+            const checked = selected.includes(opt.value);
+            return (
+              <label
+                key={opt.value}
+                className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[12px] text-pm-text hover:bg-pm-surface-2"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(opt.value)}
+                  className="accent-pm-orange"
+                />
+                <span>{opt.label}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function buildFilterCaption({ data, filter, range, testMode, count }) {
   const parts = [];
   if (testMode) parts.push('Test mode (*_test)');
   parts.push(`${count} job${count === 1 ? '' : 's'}`);
-  if (filter.status !== 'All') parts.push(filter.status);
-  if (filter.jobType !== 'All') {
-    const lbl = data?.jobTypes?.find((t) => t.tag === filter.jobType)?.label || filter.jobType;
-    parts.push(lbl);
+  if (filter.statuses.length > 0) parts.push(filter.statuses.join(', '));
+  if (filter.jobTypes.length > 0) {
+    const labels = filter.jobTypes.map(
+      (tag) => data?.jobTypes?.find((t) => t.tag === tag)?.label || tag,
+    );
+    parts.push(labels.join(', '));
   }
   if (filter.search) parts.push(`"${filter.search}"`);
   if (range.all) parts.push('All time');

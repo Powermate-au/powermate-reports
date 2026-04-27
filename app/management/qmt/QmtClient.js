@@ -115,6 +115,8 @@ export default function QmtClient() {
   const [sortKey, setSortKey] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
   const [openJobUuid, setOpenJobUuid] = useState(null);
+  const [viewMode, setViewMode] = useState('actual'); // 'actual' | 'estimated'
+  const [testMode, setTestMode] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -126,6 +128,7 @@ export default function QmtClient() {
         if (range.from) params.set('from', range.from);
         if (range.to) params.set('to', range.to);
       }
+      if (testMode) params.set('test', '1');
       const res = await fetch(`/api/qmt?${params.toString()}`);
       if (!res.ok) {
         const t = await res.text().catch(() => '');
@@ -143,7 +146,7 @@ export default function QmtClient() {
 
   useEffect(() => {
     load();
-  }, [range.from, range.to, range.all]);
+  }, [range.from, range.to, range.all, testMode]);
 
   const filtered = useMemo(() => {
     if (!data?.jobs) return [];
@@ -171,6 +174,58 @@ export default function QmtClient() {
     });
     return rows;
   }, [data, filter, sortKey, sortDir]);
+
+  // Filter-aware analysis window aggregation. Recomputes from filtered list
+  // so the summary respects status/jobType/search filters.
+  const summary = useMemo(() => {
+    const buckets = {};
+    const ensure = (k) => {
+      if (!buckets[k]) {
+        buckets[k] = {
+          status: k,
+          count: 0,
+          revenue: 0,
+          actRevenue: 0,
+          gpIncEst: 0,
+          gpExEst: 0,
+          gpIncAct: 0,
+          gpExAct: 0,
+          actCount: 0,
+        };
+      }
+      return buckets[k];
+    };
+    filtered.forEach((p) => {
+      const b = ensure(p.status);
+      b.count += 1;
+      b.revenue += p.estimated.totalRevenue;
+      b.gpIncEst += p.estimated.gpIncLabour;
+      b.gpExEst += p.estimated.gpExLabour;
+      if (p.actual) {
+        b.actCount += 1;
+        b.actRevenue += p.actual.totalRevenue;
+        b.gpIncAct += p.actual.gpIncLabour;
+        b.gpExAct += p.actual.gpExLabour;
+      }
+    });
+    const rows = STATUS_ORDER.map((s) => buckets[s]).filter(Boolean);
+    // Compute Total
+    const total = rows.reduce(
+      (acc, b) => {
+        acc.count += b.count;
+        acc.revenue += b.revenue;
+        acc.actRevenue += b.actRevenue;
+        acc.gpIncEst += b.gpIncEst;
+        acc.gpExEst += b.gpExEst;
+        acc.gpIncAct += b.gpIncAct;
+        acc.gpExAct += b.gpExAct;
+        acc.actCount += b.actCount;
+        return acc;
+      },
+      { status: 'Total', count: 0, revenue: 0, actRevenue: 0, gpIncEst: 0, gpExEst: 0, gpIncAct: 0, gpExAct: 0, actCount: 0 },
+    );
+    return { rows, total };
+  }, [filtered]);
 
   function toggleSort(key) {
     if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -212,14 +267,28 @@ export default function QmtClient() {
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={load}
-          disabled={loading}
-          className="rounded-md border border-pm-border-2 bg-transparent px-4 py-1.5 text-[13px] font-medium text-pm-text-2 transition-colors hover:bg-pm-surface-2 hover:text-pm-text disabled:opacity-50"
-        >
-          ↻ Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTestMode(!testMode)}
+            className={`rounded-md border px-3 py-1.5 text-[12px] font-medium transition-colors ${
+              testMode
+                ? 'border-pm-orange bg-pm-orange text-white'
+                : 'border-pm-border-2 bg-transparent text-pm-text-2 hover:bg-pm-surface-2 hover:text-pm-text'
+            }`}
+            title="Show only jobs tagged with *_test in their description"
+          >
+            {testMode ? '● Test mode on' : '○ Test mode'}
+          </button>
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className="rounded-md border border-pm-border-2 bg-transparent px-4 py-1.5 text-[13px] font-medium text-pm-text-2 transition-colors hover:bg-pm-surface-2 hover:text-pm-text disabled:opacity-50"
+          >
+            ↻ Refresh
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -289,98 +358,13 @@ export default function QmtClient() {
             />
           </div>
 
-          <div className="mb-6 overflow-x-auto rounded-lg border border-pm-border bg-pm-surface">
-            <div className="border-b border-pm-border px-4 py-2 font-condensed text-[11px] font-bold uppercase tracking-[0.1em] text-pm-orange">
-              By status
-            </div>
-            <table className="w-full text-[12.5px]">
-              <thead className="text-left text-[11px] uppercase tracking-[0.05em] text-pm-text-3">
-                <tr className="border-b border-pm-border">
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium text-right">Jobs</th>
-                  <th className="px-3 py-2 font-medium text-right border-l border-pm-border bg-pm-orange-bg/30" colSpan={3}>Estimated</th>
-                  <th className="px-3 py-2 font-medium text-right border-l border-pm-border bg-pm-green-bg/20" colSpan={3}>Actual</th>
-                </tr>
-                <tr className="border-b border-pm-border text-[10px]">
-                  <th colSpan={2}></th>
-                  <th className="px-3 py-1 font-medium text-right border-l border-pm-border bg-pm-orange-bg/30">Revenue</th>
-                  <th className="px-3 py-1 font-medium text-right bg-pm-orange-bg/30">GP Inc</th>
-                  <th className="px-3 py-1 font-medium text-right bg-pm-orange-bg/30">M%</th>
-                  <th className="px-3 py-1 font-medium text-right border-l border-pm-border bg-pm-green-bg/20">Revenue</th>
-                  <th className="px-3 py-1 font-medium text-right bg-pm-green-bg/20">GP Inc</th>
-                  <th className="px-3 py-1 font-medium text-right bg-pm-green-bg/20">M%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {STATUS_ORDER.concat(
-                  data.byStatus.map((s) => s.status).filter((s) => !STATUS_ORDER.includes(s)),
-                ).map((statusName) => {
-                  const r = data.byStatus.find((s) => s.status === statusName);
-                  if (!r) return null;
-                  const hasActuals = r.status === 'Work Order' || r.status === 'Completed';
-                  return (
-                    <tr key={r.status} className="border-b border-pm-border last:border-b-0">
-                      <td className="px-3 py-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusToneCls(r.status)}`}>
-                          {r.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right font-mono">{r.count}</td>
-                      <td className="px-3 py-2 text-right font-mono border-l border-pm-border">{fmtMoney(r.estRevenue)}</td>
-                      <td className="px-3 py-2 text-right font-mono">{fmtMoney(r.estGpInc)}</td>
-                      <td className={`px-3 py-2 text-right font-mono ${marginToneCls(r.estMarginInc)}`}>{fmtPct(r.estMarginInc)}</td>
-                      <td className="px-3 py-2 text-right font-mono border-l border-pm-border">{hasActuals ? fmtMoney(r.actRevenue) : '—'}</td>
-                      <td className="px-3 py-2 text-right font-mono">{hasActuals ? fmtMoney(r.actGpInc) : '—'}</td>
-                      <td className={`px-3 py-2 text-right font-mono ${hasActuals ? marginToneCls(r.actMarginInc) : 'text-pm-text-3'}`}>{hasActuals ? fmtPct(r.actMarginInc) : '—'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mb-6 overflow-x-auto rounded-lg border border-pm-border bg-pm-surface">
-            <div className="border-b border-pm-border px-4 py-2 font-condensed text-[11px] font-bold uppercase tracking-[0.1em] text-pm-orange">
-              By job type
-            </div>
-            <table className="w-full text-[12.5px]">
-              <thead className="text-left text-[11px] uppercase tracking-[0.05em] text-pm-text-3">
-                <tr className="border-b border-pm-border">
-                  <th className="px-3 py-2 font-medium">Type</th>
-                  <th className="px-3 py-2 font-medium text-right">Quoted</th>
-                  <th className="px-3 py-2 font-medium text-right">Won</th>
-                  <th className="px-3 py-2 font-medium text-right">Lost</th>
-                  <th className="px-3 py-2 font-medium text-right">Win % (Decided)</th>
-                  <th className="px-3 py-2 font-medium text-right border-l border-pm-border bg-pm-orange-bg/30">Est M%</th>
-                  <th className="px-3 py-2 font-medium text-right border-l border-pm-border bg-pm-green-bg/20">Act M%</th>
-                  <th className="px-3 py-2 font-medium text-right">Δ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.byJobType.map((r) => {
-                  const delta = r.actMarginInc - r.estMarginInc;
-                  return (
-                    <tr key={r.tag} className="border-b border-pm-border last:border-b-0">
-                      <td className="px-3 py-2 text-pm-text">{r.label}</td>
-                      <td className="px-3 py-2 text-right font-mono">{r.totalQuoted}</td>
-                      <td className="px-3 py-2 text-right font-mono text-pm-green">{r.won}</td>
-                      <td className="px-3 py-2 text-right font-mono text-pm-red">{r.lost}</td>
-                      <td className="px-3 py-2 text-right font-mono">{fmtPct(r.winRatioDecided)}</td>
-                      <td className={`px-3 py-2 text-right font-mono border-l border-pm-border ${marginToneCls(r.estMarginInc)}`}>
-                        {fmtPct(r.estMarginInc)}
-                      </td>
-                      <td className={`px-3 py-2 text-right font-mono border-l border-pm-border ${marginToneCls(r.actMarginInc)}`}>
-                        {fmtPct(r.actMarginInc)}
-                      </td>
-                      <td className={`px-3 py-2 text-right font-mono ${delta >= 0 ? 'text-pm-green' : 'text-pm-red'}`}>
-                        {delta >= 0 ? '+' : ''}{fmtPct(delta)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <AnalysisWindow
+            summary={summary}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            targets={data.targets || { incLabour: 0.425, exLabour: 0.593 }}
+            filterCaption={buildFilterCaption({ data, filter, range, testMode, count: filtered.length })}
+          />
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-[11px] uppercase tracking-[0.05em] text-pm-text-3">Filter:</span>
@@ -524,5 +508,153 @@ function Th({ children, onClick, active, dir, align = 'left' }) {
     >
       {children} {active ? (dir === 'asc' ? '↑' : '↓') : ''}
     </th>
+  );
+}
+
+function buildFilterCaption({ data, filter, range, testMode, count }) {
+  const parts = [];
+  if (testMode) parts.push('Test mode (*_test)');
+  parts.push(`${count} job${count === 1 ? '' : 's'}`);
+  if (filter.status !== 'All') parts.push(filter.status);
+  if (filter.jobType !== 'All') {
+    const lbl = data?.jobTypes?.find((t) => t.tag === filter.jobType)?.label || filter.jobType;
+    parts.push(lbl);
+  }
+  if (filter.search) parts.push(`"${filter.search}"`);
+  if (range.all) parts.push('All time');
+  else if (range.from || range.to) parts.push(`${range.from || '…'} → ${range.to || '…'}`);
+  return parts.join(' · ');
+}
+
+function AnalysisWindow({ summary, viewMode, setViewMode, targets, filterCaption }) {
+  const isActual = viewMode === 'actual';
+  const variance = (margin, target) =>
+    margin === null || margin === undefined ? null : margin - target;
+
+  // Build display rows per status + Total
+  const rowFor = (b) => {
+    const hasActuals = b.status === 'Work Order' || b.status === 'Completed' || b.status === 'Total';
+    const showActual = isActual && hasActuals;
+    const denom = showActual ? b.actRevenue : b.revenue;
+    const gpInc = showActual ? b.gpIncAct : b.gpIncEst;
+    const gpEx = showActual ? b.gpExAct : b.gpExEst;
+    const mInc = denom > 0 ? gpInc / denom : null;
+    const mEx = denom > 0 ? gpEx / denom : null;
+    return {
+      ...b,
+      revenueShown: denom,
+      gpInc,
+      gpEx,
+      mInc,
+      mEx,
+      hasActuals,
+      showActual,
+    };
+  };
+
+  const rows = summary.rows.map(rowFor);
+  const totalRow = rowFor(summary.total);
+
+  return (
+    <div className="mb-6 rounded-lg border border-pm-border bg-pm-surface">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-pm-border px-4 py-2">
+        <div>
+          <div className="font-condensed text-[11px] font-bold uppercase tracking-[0.1em] text-pm-orange">
+            Summary analysis
+          </div>
+          <div className="mt-0.5 text-[11px] text-pm-text-3">{filterCaption}</div>
+        </div>
+        <div className="inline-flex gap-0.5 rounded-md border border-pm-border bg-pm-bg p-0.5 text-[11px]">
+          <button
+            type="button"
+            onClick={() => setViewMode('estimated')}
+            className={`rounded px-3 py-1 font-medium transition-colors ${
+              viewMode === 'estimated' ? 'bg-pm-orange text-white' : 'text-pm-text-2 hover:text-pm-text'
+            }`}
+          >
+            Estimated
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('actual')}
+            className={`rounded px-3 py-1 font-medium transition-colors ${
+              viewMode === 'actual' ? 'bg-pm-orange text-white' : 'text-pm-text-2 hover:text-pm-text'
+            }`}
+          >
+            Actual
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12.5px]">
+          <thead className="text-left text-[10px] uppercase tracking-[0.05em] text-pm-text-3">
+            <tr className="border-b border-pm-border">
+              <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium text-right">Jobs</th>
+              <th className="px-3 py-2 font-medium text-right">Revenue</th>
+              <th className="px-3 py-2 font-medium text-right">Target Inc</th>
+              <th className="px-3 py-2 font-medium text-right">GP Inc Lab</th>
+              <th className="px-3 py-2 font-medium text-right">M% Inc Lab</th>
+              <th className="px-3 py-2 font-medium text-right border-l border-pm-border">Target Ex</th>
+              <th className="px-3 py-2 font-medium text-right">GP Ex Lab</th>
+              <th className="px-3 py-2 font-medium text-right">M% Ex Lab</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <AnalysisRow key={r.status} r={r} targets={targets} variance={variance} isTotal={false} />
+            ))}
+          </tbody>
+          <tfoot>
+            <AnalysisRow r={totalRow} targets={targets} variance={variance} isTotal={true} />
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AnalysisRow({ r, targets, variance, isTotal }) {
+  const vInc = variance(r.mInc, targets.incLabour);
+  const vEx = variance(r.mEx, targets.exLabour);
+  const cls = isTotal ? 'border-t-2 border-pm-border bg-pm-bg/30 font-medium' : 'border-b border-pm-border last:border-b-0';
+  const vClass = (v) =>
+    v === null || v === undefined ? 'text-pm-text-3' : v >= 0 ? 'text-pm-green' : 'text-pm-red';
+  const vTxt = (v) => (v === null || v === undefined ? '' : `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%`);
+  return (
+    <tr className={cls}>
+      <td className="px-3 py-2">
+        {isTotal ? (
+          <span className="font-medium">Total</span>
+        ) : (
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusToneCls(r.status)}`}>
+            {r.status}
+          </span>
+        )}
+      </td>
+      <td className="px-3 py-2 text-right font-mono">{r.count}</td>
+      <td className="px-3 py-2 text-right font-mono">
+        {r.revenueShown > 0 ? fmtMoney(r.revenueShown) : '—'}
+      </td>
+      <td className="px-3 py-2 text-right font-mono text-pm-text-3">{fmtPct(targets.incLabour)}</td>
+      <td className="px-3 py-2 text-right font-mono">{r.mInc === null ? '—' : fmtMoney(r.gpInc)}</td>
+      <td className={`px-3 py-2 text-right font-mono ${marginToneCls(r.mInc, targets.incLabour)}`}>
+        {r.mInc === null ? '—' : (
+          <span>
+            {fmtPct(r.mInc)} <span className={`text-[10px] ${vClass(vInc)}`}>{vTxt(vInc)}</span>
+          </span>
+        )}
+      </td>
+      <td className="px-3 py-2 text-right font-mono text-pm-text-3 border-l border-pm-border">{fmtPct(targets.exLabour)}</td>
+      <td className="px-3 py-2 text-right font-mono">{r.mEx === null ? '—' : fmtMoney(r.gpEx)}</td>
+      <td className={`px-3 py-2 text-right font-mono ${marginToneCls(r.mEx, targets.exLabour)}`}>
+        {r.mEx === null ? '—' : (
+          <span>
+            {fmtPct(r.mEx)} <span className={`text-[10px] ${vClass(vEx)}`}>{vTxt(vEx)}</span>
+          </span>
+        )}
+      </td>
+    </tr>
   );
 }

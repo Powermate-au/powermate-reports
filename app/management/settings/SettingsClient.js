@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { DEFAULT_JOB_TYPES, DEFAULT_ROOT_CAUSES, TAG_PREFIX } from '@/lib/qmt-config';
+import {
+  DEFAULT_JOB_TYPES,
+  DEFAULT_ROOT_CAUSES,
+  DEFAULT_TARGET_INC_LABOUR,
+  DEFAULT_TARGET_EX_LABOUR,
+  TAG_PREFIX,
+} from '@/lib/qmt-config';
 
 function slugify(s) {
   return s
@@ -14,6 +20,10 @@ function slugify(s) {
 export default function SettingsClient() {
   const [jobTypes, setJobTypes] = useState([]);
   const [rootCauses, setRootCauses] = useState([]);
+  const [targets, setTargets] = useState({
+    incLabour: DEFAULT_TARGET_INC_LABOUR,
+    exLabour: DEFAULT_TARGET_EX_LABOUR,
+  });
   const [newType, setNewType] = useState({ tag: '', label: '' });
   const [newCause, setNewCause] = useState('');
   const [loading, setLoading] = useState(true);
@@ -29,6 +39,10 @@ export default function SettingsClient() {
         const data = await res.json();
         setJobTypes(data.jobTypes?.length ? data.jobTypes : DEFAULT_JOB_TYPES);
         setRootCauses(data.rootCauses?.length ? data.rootCauses : DEFAULT_ROOT_CAUSES);
+        setTargets({
+          incLabour: Number.isFinite(data.targets?.incLabour) ? data.targets.incLabour : DEFAULT_TARGET_INC_LABOUR,
+          exLabour: Number.isFinite(data.targets?.exLabour) ? data.targets.exLabour : DEFAULT_TARGET_EX_LABOUR,
+        });
       } catch (e) {
         setError(e.message);
         setJobTypes(DEFAULT_JOB_TYPES);
@@ -74,7 +88,7 @@ export default function SettingsClient() {
       const res = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobTypes, rootCauses }),
+        body: JSON.stringify({ jobTypes, rootCauses, targets }),
       });
       if (!res.ok) {
         const t = await res.text().catch(() => '');
@@ -107,6 +121,39 @@ export default function SettingsClient() {
         </div>
       ) : (
         <>
+          <section className="mb-5 rounded-lg border border-pm-border bg-pm-surface p-5">
+            <div className="mb-1 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
+              Margin targets
+            </div>
+            <p className="mb-3 text-[12px] text-pm-text-3">
+              Used by the QMT analysis window to colour-code performance vs target.
+            </p>
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-2 text-[13px] text-pm-text-2">
+                <span className="font-medium">Inc Labour</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={(targets.incLabour * 100).toFixed(1)}
+                  onChange={(e) => setTargets({ ...targets, incLabour: Number(e.target.value) / 100 })}
+                  className="w-20 rounded border border-pm-border-2 bg-pm-bg px-2 py-1 text-right text-[13px] text-pm-text outline-none focus:border-pm-orange"
+                />
+                <span>%</span>
+              </label>
+              <label className="flex items-center gap-2 text-[13px] text-pm-text-2">
+                <span className="font-medium">Ex Labour</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={(targets.exLabour * 100).toFixed(1)}
+                  onChange={(e) => setTargets({ ...targets, exLabour: Number(e.target.value) / 100 })}
+                  className="w-20 rounded border border-pm-border-2 bg-pm-bg px-2 py-1 text-right text-[13px] text-pm-text outline-none focus:border-pm-orange"
+                />
+                <span>%</span>
+              </label>
+            </div>
+          </section>
+
           <section className="mb-5 rounded-lg border border-pm-border bg-pm-surface p-5">
             <div className="mb-1 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
               Job type tags

@@ -7,11 +7,15 @@ import {
   summariseByJobType,
   topLevelKpis,
 } from '@/lib/qmt-calc';
-import { DEFAULT_JOB_TYPES } from '@/lib/qmt-config';
+import {
+  DEFAULT_JOB_TYPES,
+  DEFAULT_TARGET_INC_LABOUR,
+  DEFAULT_TARGET_EX_LABOUR,
+} from '@/lib/qmt-config';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
-async function loadJobTypesFromConfig() {
+async function loadConfig() {
   try {
     const auth = new google.auth.GoogleAuth({
       credentials: {
@@ -29,9 +33,26 @@ async function loadJobTypesFromConfig() {
     const types = rows
       .filter((r) => r[0] === 'job_type' && r[1])
       .map((r) => ({ tag: r[1], label: r[2] || r[1] }));
-    return types.length > 0 ? types : DEFAULT_JOB_TYPES;
+    const targets = {
+      incLabour: DEFAULT_TARGET_INC_LABOUR,
+      exLabour: DEFAULT_TARGET_EX_LABOUR,
+    };
+    rows.forEach(([k, v]) => {
+      if (k === 'target_inc_labour' && v) targets.incLabour = parseFloat(v);
+      if (k === 'target_ex_labour' && v) targets.exLabour = parseFloat(v);
+    });
+    return {
+      jobTypes: types.length > 0 ? types : DEFAULT_JOB_TYPES,
+      targets,
+    };
   } catch {
-    return DEFAULT_JOB_TYPES;
+    return {
+      jobTypes: DEFAULT_JOB_TYPES,
+      targets: {
+        incLabour: DEFAULT_TARGET_INC_LABOUR,
+        exLabour: DEFAULT_TARGET_EX_LABOUR,
+      },
+    };
   }
 }
 
@@ -47,14 +68,16 @@ export async function GET(request) {
     const fromParam = searchParams.get('from');
     const toParam = searchParams.get('to');
     const all = searchParams.get('all') === '1';
+    const testMode = searchParams.get('test') === '1';
 
     const from = parseDate(fromParam);
     const to = parseDate(toParam);
 
     const [
       { jobs, lineItems, contacts, companies, materials, activities, staff },
-      jobTypes,
-    ] = await Promise.all([loadAll(), loadJobTypesFromConfig()]);
+      config,
+    ] = await Promise.all([loadAll(), loadConfig()]);
+    const { jobTypes, targets } = config;
 
     let filteredJobs = jobs;
     if (!all && (from || to)) {
@@ -66,6 +89,11 @@ export async function GET(request) {
         if (to && d > to) return false;
         return true;
       });
+    }
+    if (testMode) {
+      filteredJobs = filteredJobs.filter((j) =>
+        ((j.job_description || j.description || '').toLowerCase()).includes('*_test'),
+      );
     }
 
     const processed = processJobs({
@@ -86,12 +114,14 @@ export async function GET(request) {
         to: to ? to.toISOString().slice(0, 10) : null,
         all,
       },
+      testMode,
       totalJobs: processed.length,
       kpis: topLevelKpis(processed),
       byStatus: summariseByStatus(processed),
       byJobType: summariseByJobType(processed, jobTypes),
       jobs: processed,
       jobTypes,
+      targets,
     });
   } catch (error) {
     console.error('QMT API error:', error);

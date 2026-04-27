@@ -39,15 +39,20 @@ async function ensureTab(sheets) {
 function parseRows(rows) {
   const jobTypes = [];
   const rootCauses = [];
+  const targets = {};
   rows.forEach(([key, value, label]) => {
     if (!key) return;
     if (key === 'job_type' && value) {
       jobTypes.push({ tag: value, label: label || value });
     } else if (key === 'root_cause' && value) {
       rootCauses.push(value);
+    } else if (key === 'target_inc_labour' && value) {
+      targets.incLabour = parseFloat(value);
+    } else if (key === 'target_ex_labour' && value) {
+      targets.exLabour = parseFloat(value);
     }
   });
-  return { jobTypes, rootCauses };
+  return { jobTypes, rootCauses, targets };
 }
 
 export async function GET() {
@@ -71,6 +76,7 @@ export async function PUT(request) {
     const body = await request.json();
     const jobTypes = Array.isArray(body.jobTypes) ? body.jobTypes : [];
     const rootCauses = Array.isArray(body.rootCauses) ? body.rootCauses : [];
+    const targets = body.targets || {};
 
     const sheets = await getSheets();
     await ensureTab(sheets);
@@ -82,6 +88,12 @@ export async function PUT(request) {
     rootCauses.forEach((c) => {
       if (c) values.push(['root_cause', c, '']);
     });
+    if (Number.isFinite(targets.incLabour)) {
+      values.push(['target_inc_labour', String(targets.incLabour), 'Inc Labour margin target']);
+    }
+    if (Number.isFinite(targets.exLabour)) {
+      values.push(['target_ex_labour', String(targets.exLabour), 'Ex Labour margin target']);
+    }
 
     await sheets.spreadsheets.values.clear({
       spreadsheetId: SHEET_ID,

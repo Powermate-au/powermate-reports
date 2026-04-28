@@ -116,7 +116,13 @@ export default function QmtClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [range, setRange] = useState(() => ({ ...presetRange('thisMonth'), preset: 'thisMonth' }));
-  const [filter, setFilter] = useState({ statuses: [], jobTypes: [], search: '', excludedOnly: false });
+  const [filter, setFilter] = useState({
+    statuses: [],
+    jobTypes: [],
+    search: '',
+    excludedOnly: false,
+    belowDphTarget: false,
+  });
   const [sortKey, setSortKey] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
   const [openJobUuid, setOpenJobUuid] = useState(null);
@@ -160,6 +166,21 @@ export default function QmtClient() {
     if (filter.statuses.length > 0) rows = rows.filter((r) => filter.statuses.includes(r.status));
     if (filter.jobTypes.length > 0) rows = rows.filter((r) => filter.jobTypes.includes(r.jobType));
     if (filter.excludedOnly) rows = rows.filter((r) => r.excludedFromKpis);
+    if (filter.belowDphTarget) {
+      const globalDph = data?.targets?.dollarsPerHour ?? 150;
+      const targetByTag = new Map(
+        (data?.jobTypes || []).map((t) => [
+          t.tag,
+          Number.isFinite(t.targetDollarsPerHour) ? t.targetDollarsPerHour : globalDph,
+        ]),
+      );
+      rows = rows.filter((r) => {
+        const side = r.actual || r.estimated;
+        if (!side || side.dollarsPerHour === null || side.dollarsPerHour === undefined) return false;
+        const tgt = targetByTag.get(r.jobType) ?? globalDph;
+        return side.dollarsPerHour < tgt;
+      });
+    }
     if (filter.search) {
       const q = filter.search.toLowerCase();
       rows = rows.filter(
@@ -187,15 +208,17 @@ export default function QmtClient() {
   const summary = useMemo(() => {
     const globalIncTarget = data?.targets?.incLabour ?? 0.425;
     const globalExTarget = data?.targets?.exLabour ?? 0.593;
+    const globalDphTarget = data?.targets?.dollarsPerHour ?? 150;
     const targetByTag = new Map();
     (data?.jobTypes || []).forEach((t) => {
       targetByTag.set(t.tag, {
         inc: Number.isFinite(t.targetInc) ? t.targetInc : globalIncTarget,
         ex: Number.isFinite(t.targetEx) ? t.targetEx : globalExTarget,
+        dph: Number.isFinite(t.targetDollarsPerHour) ? t.targetDollarsPerHour : globalDphTarget,
       });
     });
     const targetsFor = (tag) =>
-      targetByTag.get(tag) || { inc: globalIncTarget, ex: globalExTarget };
+      targetByTag.get(tag) || { inc: globalIncTarget, ex: globalExTarget, dph: globalDphTarget };
 
     const buckets = {};
     const ensure = (k) => {
@@ -217,6 +240,9 @@ export default function QmtClient() {
           twExSum: 0,
           twActIncSum: 0,
           twActExSum: 0,
+          // Hours-weighted $/hr target accumulators (weighted by labour hours)
+          twDphEstSum: 0,
+          twDphActSum: 0,
         };
       }
       return buckets[k];
@@ -232,6 +258,7 @@ export default function QmtClient() {
       b.estHours += p.estimated.labour.hours || 0;
       b.twIncSum += tgt.inc * p.estimated.totalRevenue;
       b.twExSum += tgt.ex * p.estimated.totalRevenue;
+      b.twDphEstSum += tgt.dph * (p.estimated.labour.hours || 0);
       if (p.actual) {
         b.actCount += 1;
         b.actRevenue += p.actual.totalRevenue;
@@ -240,6 +267,7 @@ export default function QmtClient() {
         b.actHours += p.actual.labour.hours || 0;
         b.twActIncSum += tgt.inc * p.actual.totalRevenue;
         b.twActExSum += tgt.ex * p.actual.totalRevenue;
+        b.twDphActSum += tgt.dph * (p.actual.labour.hours || 0);
       }
     });
     const rows = STATUS_ORDER.map((s) => buckets[s]).filter(Boolean);
@@ -259,6 +287,8 @@ export default function QmtClient() {
         acc.twExSum += b.twExSum;
         acc.twActIncSum += b.twActIncSum;
         acc.twActExSum += b.twActExSum;
+        acc.twDphEstSum += b.twDphEstSum;
+        acc.twDphActSum += b.twDphActSum;
         return acc;
       },
       {
@@ -277,6 +307,8 @@ export default function QmtClient() {
         twExSum: 0,
         twActIncSum: 0,
         twActExSum: 0,
+        twDphEstSum: 0,
+        twDphActSum: 0,
       },
     );
     return { rows, total };
@@ -511,6 +543,18 @@ export default function QmtClient() {
             >
               {filter.excludedOnly ? '⊘ Excluded only' : '⊘ Excluded'}
             </button>
+            <button
+              type="button"
+              onClick={() => setFilter({ ...filter, belowDphTarget: !filter.belowDphTarget })}
+              title="Show only jobs whose $/hr is below the type's target"
+              className={`rounded-md border px-3 py-1 text-[12px] transition-colors ${
+                filter.belowDphTarget
+                  ? 'border-pm-red bg-pm-red-bg text-pm-red'
+                  : 'border-pm-border-2 bg-pm-surface text-pm-text-2 hover:bg-pm-surface-2 hover:text-pm-text'
+              }`}
+            >
+              {filter.belowDphTarget ? '▼ Below $/hr only' : '▼ Below $/hr'}
+            </button>
             <span className="text-[11px] text-pm-text-3">Showing {filtered.length}</span>
           </div>
 
@@ -606,9 +650,20 @@ export default function QmtClient() {
                         <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">
                           {(() => {
                             const side = j.actual || j.estimated;
-                            return side?.dollarsPerHour === null || side?.dollarsPerHour === undefined
-                              ? '—'
-                              : fmtPerHour(side.dollarsPerHour);
+                            const dph = side?.dollarsPerHour;
+                            if (dph === null || dph === undefined) return '—';
+                            const globalDph = data?.targets?.dollarsPerHour ?? 150;
+                            const typeT = data?.jobTypes?.find((t) => t.tag === j.jobType);
+                            const tgt = Number.isFinite(typeT?.targetDollarsPerHour)
+                              ? typeT.targetDollarsPerHour
+                              : globalDph;
+                            const below = dph < tgt;
+                            return (
+                              <span className={below ? 'text-pm-red' : 'text-pm-text'}>
+                                {below && <span title={`Below target ${fmtPerHour(tgt)}`}>▼ </span>}
+                                {fmtPerHour(dph)}
+                              </span>
+                            );
                           })()}
                         </td>
                         <td className="px-3 py-1.5 text-right">
@@ -775,6 +830,7 @@ function AnalysisWindow({ summary, viewMode, setViewMode, targets, filterCaption
         targetInc: null,
         targetEx: null,
         dollarsPerHour: null,
+        targetDollarsPerHour: null,
         hasActuals,
         showActual: false,
       };
@@ -788,10 +844,12 @@ function AnalysisWindow({ summary, viewMode, setViewMode, targets, filterCaption
     const mEx = denom > 0 ? gpEx / denom : null;
     const tIncSum = showActual ? b.twActIncSum : b.twIncSum;
     const tExSum = showActual ? b.twActExSum : b.twExSum;
+    const tDphSum = showActual ? b.twDphActSum : b.twDphEstSum;
     const targetInc = denom > 0 ? tIncSum / denom : (targets?.incLabour ?? null);
     const targetEx = denom > 0 ? tExSum / denom : (targets?.exLabour ?? null);
+    const targetDollarsPerHour = hours > 0 ? tDphSum / hours : (targets?.dollarsPerHour ?? null);
     const dollarsPerHour = hours > 0 ? gpEx / hours : null;
-    return { ...b, revenueShown: denom, gpInc, gpEx, mInc, mEx, targetInc, targetEx, dollarsPerHour, hasActuals, showActual };
+    return { ...b, revenueShown: denom, gpInc, gpEx, mInc, mEx, targetInc, targetEx, dollarsPerHour, targetDollarsPerHour, hasActuals, showActual };
   };
 
   const rows = summary.rows.map(rowFor);
@@ -841,7 +899,8 @@ function AnalysisWindow({ summary, viewMode, setViewMode, targets, filterCaption
               <th className="px-3 py-2 font-medium text-right border-l border-pm-border">Target Ex</th>
               <th className="px-3 py-2 font-medium text-right">GP Ex Lab</th>
               <th className="px-3 py-2 font-medium text-right">M% Ex Lab</th>
-              <th className="px-3 py-2 font-medium text-right border-l border-pm-border">$/hr</th>
+              <th className="px-3 py-2 font-medium text-right border-l border-pm-border">Target $/hr</th>
+              <th className="px-3 py-2 font-medium text-right">$/hr</th>
             </tr>
           </thead>
           <tbody>
@@ -901,8 +960,31 @@ function AnalysisRow({ r, targets, variance, isTotal }) {
           </span>
         )}
       </td>
-      <td className="px-3 py-2 text-right font-mono border-l border-pm-border">
-        {r.dollarsPerHour === null ? '—' : fmtPerHour(r.dollarsPerHour)}
+      <td className="px-3 py-2 text-right font-mono text-pm-text-3 border-l border-pm-border">
+        {r.targetDollarsPerHour === null ? '—' : fmtPerHour(r.targetDollarsPerHour)}
+      </td>
+      <td
+        className={`px-3 py-2 text-right font-mono ${
+          r.dollarsPerHour === null
+            ? 'text-pm-text-3'
+            : r.dollarsPerHour >= (r.targetDollarsPerHour ?? 0)
+            ? 'text-pm-green'
+            : 'text-pm-red'
+        }`}
+      >
+        {r.dollarsPerHour === null ? (
+          '—'
+        ) : (
+          <span>
+            {fmtPerHour(r.dollarsPerHour)}
+            {r.targetDollarsPerHour !== null && (
+              <span className={`ml-1 text-[10px] ${r.dollarsPerHour >= r.targetDollarsPerHour ? 'text-pm-green' : 'text-pm-red'}`}>
+                {r.dollarsPerHour - r.targetDollarsPerHour >= 0 ? '+' : ''}
+                {fmtPerHour(r.dollarsPerHour - r.targetDollarsPerHour)}
+              </span>
+            )}
+          </span>
+        )}
       </td>
     </tr>
   );

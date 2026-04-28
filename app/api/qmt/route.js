@@ -11,6 +11,7 @@ import {
   DEFAULT_JOB_TYPES,
   DEFAULT_TARGET_INC_LABOUR,
   DEFAULT_TARGET_EX_LABOUR,
+  DEFAULT_TARGET_DOLLARS_PER_HOUR,
 } from '@/lib/qmt-config';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
@@ -63,16 +64,22 @@ async function loadConfig() {
         const tag = k.slice('target_ex_'.length);
         const cur = typesByTag.get(tag) || { tag, label: tag };
         typesByTag.set(tag, { ...cur, targetEx: parseFloat(v) });
+      } else if (k && k.startsWith('target_dph_') && v) {
+        const tag = k.slice('target_dph_'.length);
+        const cur = typesByTag.get(tag) || { tag, label: tag };
+        typesByTag.set(tag, { ...cur, targetDollarsPerHour: parseFloat(v) });
       }
     });
     const types = Array.from(typesByTag.values());
     const targets = {
       incLabour: DEFAULT_TARGET_INC_LABOUR,
       exLabour: DEFAULT_TARGET_EX_LABOUR,
+      dollarsPerHour: DEFAULT_TARGET_DOLLARS_PER_HOUR,
     };
     rows.forEach(([k, v]) => {
       if (k === 'target_inc_labour' && v) targets.incLabour = parseFloat(v);
       if (k === 'target_ex_labour' && v) targets.exLabour = parseFloat(v);
+      if (k === 'target_dollars_per_hour' && v) targets.dollarsPerHour = parseFloat(v);
     });
     return {
       jobTypes: types.length > 0 ? types : DEFAULT_JOB_TYPES,
@@ -84,6 +91,7 @@ async function loadConfig() {
       targets: {
         incLabour: DEFAULT_TARGET_INC_LABOUR,
         exLabour: DEFAULT_TARGET_EX_LABOUR,
+        dollarsPerHour: DEFAULT_TARGET_DOLLARS_PER_HOUR,
       },
     };
   }

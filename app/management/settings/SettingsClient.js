@@ -6,6 +6,7 @@ import {
   DEFAULT_ROOT_CAUSES,
   DEFAULT_TARGET_INC_LABOUR,
   DEFAULT_TARGET_EX_LABOUR,
+  DEFAULT_TARGET_DOLLARS_PER_HOUR,
   TAG_PREFIX,
 } from '@/lib/qmt-config';
 
@@ -15,6 +16,39 @@ function slugify(s) {
     .trim()
     .replace(/[^a-z0-9]+/g, '')
     .slice(0, 24);
+}
+
+// Money input — same local-string-state pattern as PercentInput but the
+// stored value is a plain dollar number (e.g. 150 for $150/hr).
+function MoneyInput({ value, onChange, placeholder = '—', className = '' }) {
+  const initial = Number.isFinite(value) ? String(value) : '';
+  const [text, setText] = useState(initial);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (!focused) {
+      setText(Number.isFinite(value) ? String(value) : '');
+    }
+  }, [value, focused]);
+  return (
+    <input
+      type="number"
+      step="1"
+      placeholder={placeholder}
+      value={text}
+      onFocus={() => setFocused(true)}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        setFocused(false);
+        const t = text.trim();
+        if (t === '') onChange(undefined);
+        else {
+          const n = parseFloat(t);
+          onChange(Number.isFinite(n) ? n : undefined);
+        }
+      }}
+      className={className}
+    />
+  );
 }
 
 // Number-as-percentage input: holds local string state so users can type
@@ -57,6 +91,7 @@ export default function SettingsClient() {
   const [targets, setTargets] = useState({
     incLabour: DEFAULT_TARGET_INC_LABOUR,
     exLabour: DEFAULT_TARGET_EX_LABOUR,
+    dollarsPerHour: DEFAULT_TARGET_DOLLARS_PER_HOUR,
   });
   const [newType, setNewType] = useState({ tag: '', label: '' });
   const [newCause, setNewCause] = useState('');
@@ -76,6 +111,7 @@ export default function SettingsClient() {
         setTargets({
           incLabour: Number.isFinite(data.targets?.incLabour) ? data.targets.incLabour : DEFAULT_TARGET_INC_LABOUR,
           exLabour: Number.isFinite(data.targets?.exLabour) ? data.targets.exLabour : DEFAULT_TARGET_EX_LABOUR,
+          dollarsPerHour: Number.isFinite(data.targets?.dollarsPerHour) ? data.targets.dollarsPerHour : DEFAULT_TARGET_DOLLARS_PER_HOUR,
         });
       } catch (e) {
         setError(e.message);
@@ -198,6 +234,16 @@ export default function SettingsClient() {
                 />
                 <span>%</span>
               </label>
+              <label className="flex items-center gap-2 text-[13px] text-pm-text-2">
+                <span className="font-medium">Profit/hr</span>
+                <span className="text-pm-text-3">$</span>
+                <MoneyInput
+                  value={targets.dollarsPerHour}
+                  onChange={(v) => setTargets({ ...targets, dollarsPerHour: v ?? DEFAULT_TARGET_DOLLARS_PER_HOUR })}
+                  className="w-20 rounded border border-pm-border-2 bg-pm-bg px-2 py-1 text-right text-[13px] text-pm-text outline-none focus:border-pm-orange"
+                />
+                <span>/hr</span>
+              </label>
             </div>
           </section>
 
@@ -256,6 +302,17 @@ export default function SettingsClient() {
                       className="w-14 rounded border border-pm-border-2 bg-pm-surface px-1.5 py-1 text-right text-[12px] text-pm-text outline-none focus:border-pm-orange"
                     />
                     <span>%</span>
+                  </label>
+                  <label className="flex items-center gap-1 text-[11px] text-pm-text-3" title="Profit per hour target (blank = use global)">
+                    $
+                    <MoneyInput
+                      value={t.targetDollarsPerHour}
+                      onChange={(v) =>
+                        setJobTypes(jobTypes.map((x) => (x.tag === t.tag ? { ...x, targetDollarsPerHour: v } : x)))
+                      }
+                      className="w-16 rounded border border-pm-border-2 bg-pm-surface px-1.5 py-1 text-right text-[12px] text-pm-text outline-none focus:border-pm-orange"
+                    />
+                    <span>/hr</span>
                   </label>
                   <button
                     type="button"

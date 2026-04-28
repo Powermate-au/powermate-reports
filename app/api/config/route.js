@@ -51,6 +51,12 @@ function parseRows(rows) {
       targets.incLabour = parseFloat(value);
     } else if (key === 'target_ex_labour' && value) {
       targets.exLabour = parseFloat(value);
+    } else if (key === 'target_dollars_per_hour' && value) {
+      targets.dollarsPerHour = parseFloat(value);
+    } else if (key.startsWith('target_dph_') && value) {
+      const tag = key.slice('target_dph_'.length);
+      const existing = jobTypesByTag.get(tag) || { tag, label: tag };
+      jobTypesByTag.set(tag, { ...existing, targetDollarsPerHour: parseFloat(value) });
     } else if (key.startsWith('target_inc_') && value) {
       const tag = key.slice('target_inc_'.length);
       const existing = jobTypesByTag.get(tag) || { tag, label: tag };
@@ -100,6 +106,9 @@ export async function PUT(request) {
       if (Number.isFinite(t.targetEx)) {
         values.push([`target_ex_${t.tag}`, String(t.targetEx), '']);
       }
+      if (Number.isFinite(t.targetDollarsPerHour)) {
+        values.push([`target_dph_${t.tag}`, String(t.targetDollarsPerHour), '']);
+      }
     });
     rootCauses.forEach((c) => {
       if (c) values.push(['root_cause', c, '']);
@@ -109,6 +118,9 @@ export async function PUT(request) {
     }
     if (Number.isFinite(targets.exLabour)) {
       values.push(['target_ex_labour', String(targets.exLabour), 'Ex Labour margin target']);
+    }
+    if (Number.isFinite(targets.dollarsPerHour)) {
+      values.push(['target_dollars_per_hour', String(targets.dollarsPerHour), 'Profit per hour target']);
     }
 
     await sheets.spreadsheets.values.clear({

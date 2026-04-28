@@ -714,8 +714,8 @@ export default function QmtClient() {
               <thead className="text-left text-[10px] uppercase tracking-[0.05em] text-pm-text-3">
                 <tr className="border-b border-pm-border bg-pm-bg/50">
                   <th colSpan={5} className="px-3 py-1.5"></th>
-                  <th colSpan={3} className="px-3 py-1.5 text-center font-medium border-l border-pm-border bg-pm-orange-bg/30">Estimated</th>
-                  <th colSpan={3} className="px-3 py-1.5 text-center font-medium border-l border-pm-border bg-pm-green-bg/20">Actual</th>
+                  <th colSpan={2} className="px-3 py-1.5 text-center font-medium border-l border-pm-border bg-pm-orange-bg/30">Estimated</th>
+                  <th colSpan={2} className="px-3 py-1.5 text-center font-medium border-l border-pm-border bg-pm-green-bg/20">Actual</th>
                   <th className="px-3 py-1.5"></th>
                   <th className="px-3 py-1.5"></th>
                   <th className="px-3 py-1.5"></th>
@@ -728,10 +728,8 @@ export default function QmtClient() {
                   <Th onClick={() => toggleSort('jobType')} active={sortKey === 'jobType'} dir={sortDir}>Type</Th>
                   <Th onClick={() => toggleSort('status')} active={sortKey === 'status'} dir={sortDir}>Status</Th>
                   <Th onClick={() => toggleSort('estimated.totalRevenue')} active={sortKey === 'estimated.totalRevenue'} dir={sortDir} align="right">Revenue</Th>
-                  <Th onClick={() => toggleSort('estimated.totalCost')} active={sortKey === 'estimated.totalCost'} dir={sortDir} align="right">Cost</Th>
                   <Th onClick={() => toggleSort('estimated.marginIncLabour')} active={sortKey === 'estimated.marginIncLabour'} dir={sortDir} align="right">M%</Th>
                   <Th onClick={() => toggleSort('actual.totalRevenue')} active={sortKey === 'actual.totalRevenue'} dir={sortDir} align="right">Revenue</Th>
-                  <Th onClick={() => toggleSort('actual.totalCost')} active={sortKey === 'actual.totalCost'} dir={sortDir} align="right">Cost</Th>
                   <Th onClick={() => toggleSort('actual.marginIncLabour')} active={sortKey === 'actual.marginIncLabour'} dir={sortDir} align="right">M%</Th>
                   <th className="px-3 py-2 font-medium text-right border-l border-pm-border">M% Δ</th>
                   <th className="px-3 py-2 font-medium text-right border-l border-pm-border">$/hr</th>
@@ -742,7 +740,7 @@ export default function QmtClient() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={15} className="px-4 py-10 text-center text-sm text-pm-text-3">
+                    <td colSpan={13} className="px-4 py-10 text-center text-sm text-pm-text-3">
                       No jobs match your filter.
                     </td>
                   </tr>
@@ -784,12 +782,10 @@ export default function QmtClient() {
                             <div className="text-[9px] text-pm-text-3 no-underline">inv {fmtMoney(j.estimated.invoice)}</div>
                           )}
                         </td>
-                        <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{fmtMoney(j.estimated.totalCost)}</td>
                         <td className={`px-3 py-1.5 text-right font-mono ${marginToneCls(j.estimated.marginIncLabour)}`}>
                           {fmtPct(j.estimated.marginIncLabour)}
                         </td>
                         <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">{j.actual ? fmtMoney(j.actual.totalRevenue) : '—'}</td>
-                        <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{j.actual ? fmtMoney(j.actual.totalCost) : '—'}</td>
                         <td className={`px-3 py-1.5 text-right font-mono ${j.actual ? marginToneCls(j.actual.marginIncLabour) : 'text-pm-text-3'}`}>
                           {j.actual ? (
                             (() => {

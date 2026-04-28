@@ -132,6 +132,8 @@ export default function QmtClient() {
     search: '',
     excludedOnly: false,
     belowDphTarget: false,
+    belowMarginTarget: false,
+    belowQuotedMargin: false,
   });
   const [sortKey, setSortKey] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
@@ -190,6 +192,29 @@ export default function QmtClient() {
         const tgt = targetByTag.get(r.jobType) ?? globalDph;
         return side.dollarsPerHour < tgt;
       });
+    }
+    if (filter.belowMarginTarget) {
+      const globalInc = data?.targets?.incLabour ?? 0.425;
+      const targetByTag = new Map(
+        (data?.jobTypes || []).map((t) => [
+          t.tag,
+          Number.isFinite(t.targetInc) ? t.targetInc : globalInc,
+        ]),
+      );
+      rows = rows.filter((r) => {
+        const side = r.actual || r.estimated;
+        if (!side || side.marginIncLabour === null || side.marginIncLabour === undefined) return false;
+        const tgt = targetByTag.get(r.jobType) ?? globalInc;
+        return side.marginIncLabour < tgt;
+      });
+    }
+    if (filter.belowQuotedMargin) {
+      rows = rows.filter(
+        (r) =>
+          r.actual &&
+          r.estimated &&
+          r.actual.marginIncLabour < r.estimated.marginIncLabour,
+      );
     }
     if (filter.search) {
       const q = filter.search.toLowerCase();
@@ -657,6 +682,30 @@ export default function QmtClient() {
             >
               {filter.belowDphTarget ? '▼ Below $/hr only' : '▼ Below $/hr'}
             </button>
+            <button
+              type="button"
+              onClick={() => setFilter({ ...filter, belowMarginTarget: !filter.belowMarginTarget })}
+              title="Show only jobs whose margin is below the type's Inc-Lab target"
+              className={`rounded-md border px-3 py-1 text-[12px] transition-colors ${
+                filter.belowMarginTarget
+                  ? 'border-pm-red bg-pm-red-bg text-pm-red'
+                  : 'border-pm-border-2 bg-pm-surface text-pm-text-2 hover:bg-pm-surface-2 hover:text-pm-text'
+              }`}
+            >
+              {filter.belowMarginTarget ? '▼ Below M% target' : '▼ Below M% target'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilter({ ...filter, belowQuotedMargin: !filter.belowQuotedMargin })}
+              title="Show only Completed jobs whose actual margin came in below estimated"
+              className={`rounded-md border px-3 py-1 text-[12px] transition-colors ${
+                filter.belowQuotedMargin
+                  ? 'border-pm-red bg-pm-red-bg text-pm-red'
+                  : 'border-pm-border-2 bg-pm-surface text-pm-text-2 hover:bg-pm-surface-2 hover:text-pm-text'
+              }`}
+            >
+              {filter.belowQuotedMargin ? '△ Below quoted M%' : '△ Below quoted M%'}
+            </button>
             <span className="text-[11px] text-pm-text-3">Showing {filtered.length}</span>
           </div>
 
@@ -742,7 +791,29 @@ export default function QmtClient() {
                         <td className="px-3 py-1.5 text-right font-mono border-l border-pm-border">{j.actual ? fmtMoney(j.actual.totalRevenue) : '—'}</td>
                         <td className="px-3 py-1.5 text-right font-mono text-pm-text-3">{j.actual ? fmtMoney(j.actual.totalCost) : '—'}</td>
                         <td className={`px-3 py-1.5 text-right font-mono ${j.actual ? marginToneCls(j.actual.marginIncLabour) : 'text-pm-text-3'}`}>
-                          {j.actual ? fmtPct(j.actual.marginIncLabour) : '—'}
+                          {j.actual ? (
+                            (() => {
+                              const globalInc = data?.targets?.incLabour ?? 0.425;
+                              const typeT = data?.jobTypes?.find((t) => t.tag === j.jobType);
+                              const tgt = Number.isFinite(typeT?.targetInc) ? typeT.targetInc : globalInc;
+                              const belowTarget = j.actual.marginIncLabour < tgt;
+                              const belowQuoted =
+                                j.estimated && j.actual.marginIncLabour < j.estimated.marginIncLabour;
+                              return (
+                                <span>
+                                  {belowQuoted && (
+                                    <span title={`Below quoted (${fmtPct(j.estimated.marginIncLabour)})`}>△ </span>
+                                  )}
+                                  {belowTarget && (
+                                    <span title={`Below target (${fmtPct(tgt)})`}>▼ </span>
+                                  )}
+                                  {fmtPct(j.actual.marginIncLabour)}
+                                </span>
+                              );
+                            })()
+                          ) : (
+                            '—'
+                          )}
                         </td>
                         <td
                           className={`px-3 py-1.5 text-right font-mono border-l border-pm-border ${

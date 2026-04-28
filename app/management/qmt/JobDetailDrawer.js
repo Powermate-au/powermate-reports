@@ -41,7 +41,14 @@ function deltaCls(delta, goodDirection = 'up') {
   return isGood ? 'text-pm-green' : 'text-pm-red';
 }
 
-export default function JobDetailDrawer({ uuid, onClose }) {
+export default function JobDetailDrawer({
+  uuid,
+  job,
+  varianceCauses = [],
+  lossReasons = [],
+  onReasonChange,
+  onClose,
+}) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -106,6 +113,16 @@ export default function JobDetailDrawer({ uuid, onClose }) {
                 <Field label="Completed" value={fmtDateTime(data.job.completion_date)} />
               </div>
             </section>
+
+            {/* Reason picker — only shown for jobs that need one */}
+            {job && reasonContextFor(job) && (
+              <ReasonSection
+                job={job}
+                varianceCauses={varianceCauses}
+                lossReasons={lossReasons}
+                onReasonChange={onReasonChange}
+              />
+            )}
 
             {/* Est vs Actual side-by-side (QMT layout) */}
             <section className="rounded-lg border border-pm-border bg-pm-surface overflow-hidden">
@@ -373,6 +390,67 @@ function ComparisonRow({ label, estTime, actTime, estCost, actCost, invoiced, de
       <td className="px-4 py-2 text-right font-mono">{fmtPct(margin)}</td>
       <td className="px-4 py-2 text-right font-mono border-l border-pm-border text-pm-text-3">—</td>
     </tr>
+  );
+}
+
+function reasonContextFor(job) {
+  if (!job) return null;
+  if (job.status === 'Unsuccessful') return 'loss';
+  if (job.status === 'Completed' && job.actual && job.estimated) {
+    if (job.actual.marginIncLabour < job.estimated.marginIncLabour) return 'variance';
+  }
+  return null;
+}
+
+function ReasonSection({ job, varianceCauses, lossReasons, onReasonChange }) {
+  const ctx = reasonContextFor(job);
+  if (!ctx) return null;
+  const options = ctx === 'variance' ? varianceCauses : lossReasons;
+  const current = job.assignedReason;
+  const title = ctx === 'variance' ? 'Variance cause' : 'Loss reason';
+  const sub = ctx === 'variance'
+    ? 'Why did this Completed job come in below the quoted margin?'
+    : 'Why did this quote not proceed?';
+  return (
+    <section className="rounded-lg border border-pm-border bg-pm-surface p-4">
+      <div className="mb-1 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
+        {title}
+      </div>
+      <p className="mb-3 text-[11px] text-pm-text-3">{sub}</p>
+      {options.length === 0 && (
+        <div className="text-[12px] italic text-pm-text-3">
+          No options yet — add some in Settings.
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => {
+          const active = current === opt;
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onReasonChange?.(active ? null : opt, ctx)}
+              className={`rounded-full border px-3 py-1 text-[12px] transition-colors ${
+                active
+                  ? 'border-pm-orange bg-pm-orange text-white'
+                  : 'border-pm-border-2 bg-pm-surface text-pm-text-2 hover:bg-pm-surface-2 hover:text-pm-text'
+              }`}
+            >
+              {opt}
+            </button>
+          );
+        })}
+        {current && (
+          <button
+            type="button"
+            onClick={() => onReasonChange?.(null, ctx)}
+            className="rounded-full border border-pm-border-2 bg-transparent px-3 py-1 text-[11px] text-pm-text-3 hover:text-pm-red hover:border-pm-red"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 

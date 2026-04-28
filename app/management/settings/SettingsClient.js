@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import {
   DEFAULT_JOB_TYPES,
-  DEFAULT_ROOT_CAUSES,
+  DEFAULT_VARIANCE_CAUSES,
+  DEFAULT_LOSS_REASONS,
   DEFAULT_TARGET_INC_LABOUR,
   DEFAULT_TARGET_EX_LABOUR,
   DEFAULT_TARGET_DOLLARS_PER_HOUR,
@@ -87,7 +88,8 @@ function PercentInput({ value, onChange, placeholder = '—', className = '' }) 
 
 export default function SettingsClient() {
   const [jobTypes, setJobTypes] = useState([]);
-  const [rootCauses, setRootCauses] = useState([]);
+  const [varianceCauses, setVarianceCauses] = useState([]);
+  const [lossReasons, setLossReasons] = useState([]);
   const [targets, setTargets] = useState({
     incLabour: DEFAULT_TARGET_INC_LABOUR,
     exLabour: DEFAULT_TARGET_EX_LABOUR,
@@ -95,6 +97,7 @@ export default function SettingsClient() {
   });
   const [newType, setNewType] = useState({ tag: '', label: '' });
   const [newCause, setNewCause] = useState('');
+  const [newReason, setNewReason] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -107,7 +110,14 @@ export default function SettingsClient() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         setJobTypes(data.jobTypes?.length ? data.jobTypes : DEFAULT_JOB_TYPES);
-        setRootCauses(data.rootCauses?.length ? data.rootCauses : DEFAULT_ROOT_CAUSES);
+        setVarianceCauses(
+          data.varianceCauses?.length
+            ? data.varianceCauses
+            : data.rootCauses?.length
+            ? data.rootCauses
+            : DEFAULT_VARIANCE_CAUSES,
+        );
+        setLossReasons(data.lossReasons?.length ? data.lossReasons : DEFAULT_LOSS_REASONS);
         setTargets({
           incLabour: Number.isFinite(data.targets?.incLabour) ? data.targets.incLabour : DEFAULT_TARGET_INC_LABOUR,
           exLabour: Number.isFinite(data.targets?.exLabour) ? data.targets.exLabour : DEFAULT_TARGET_EX_LABOUR,
@@ -116,7 +126,8 @@ export default function SettingsClient() {
       } catch (e) {
         setError(e.message);
         setJobTypes(DEFAULT_JOB_TYPES);
-        setRootCauses(DEFAULT_ROOT_CAUSES);
+        setVarianceCauses(DEFAULT_VARIANCE_CAUSES);
+        setLossReasons(DEFAULT_LOSS_REASONS);
       } finally {
         setLoading(false);
       }
@@ -147,15 +158,26 @@ export default function SettingsClient() {
     );
   }
 
-  function addRootCause() {
+  function addVarianceCause() {
     const v = newCause.trim();
-    if (!v || rootCauses.includes(v)) return;
-    setRootCauses([...rootCauses, v]);
+    if (!v || varianceCauses.includes(v)) return;
+    setVarianceCauses([...varianceCauses, v]);
     setNewCause('');
   }
 
-  function removeRootCause(c) {
-    setRootCauses(rootCauses.filter((x) => x !== c));
+  function removeVarianceCause(c) {
+    setVarianceCauses(varianceCauses.filter((x) => x !== c));
+  }
+
+  function addLossReason() {
+    const v = newReason.trim();
+    if (!v || lossReasons.includes(v)) return;
+    setLossReasons([...lossReasons, v]);
+    setNewReason('');
+  }
+
+  function removeLossReason(c) {
+    setLossReasons(lossReasons.filter((x) => x !== c));
   }
 
   async function save() {
@@ -165,7 +187,7 @@ export default function SettingsClient() {
       const res = await fetch('/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobTypes, rootCauses, targets }),
+        body: JSON.stringify({ jobTypes, varianceCauses, lossReasons, targets }),
       });
       if (!res.ok) {
         const t = await res.text().catch(() => '');
@@ -352,19 +374,19 @@ export default function SettingsClient() {
 
           <section className="mb-5 rounded-lg border border-pm-border bg-pm-surface p-5">
             <div className="mb-1 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
-              Root causes
+              Variance causes
             </div>
             <p className="mb-3 text-[12px] text-pm-text-3">
-              Used to categorise variance on completed jobs where actual margin is below quote.
+              Reasons why a Completed job's actual margin came in below estimated. Surfaced as a picker on negative-variance Completed jobs in the QMT.
             </p>
 
             <div className="flex flex-col gap-1.5">
-              {rootCauses.map((c) => (
+              {varianceCauses.map((c) => (
                 <div key={c} className="flex items-center gap-2 rounded-md border border-pm-border bg-pm-bg px-3 py-2">
                   <span className="flex-1 text-[13px] text-pm-text">{c}</span>
                   <button
                     type="button"
-                    onClick={() => removeRootCause(c)}
+                    onClick={() => removeVarianceCause(c)}
                     className="rounded border border-pm-border-2 px-2 py-1 text-[11px] text-pm-text-3 hover:border-pm-red hover:text-pm-red"
                   >
                     Remove
@@ -376,15 +398,57 @@ export default function SettingsClient() {
             <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-pm-border pt-3">
               <input
                 type="text"
-                placeholder="New root cause"
+                placeholder="New variance cause"
                 value={newCause}
                 onChange={(e) => setNewCause(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRootCause())}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addVarianceCause())}
                 className="flex-1 min-w-[180px] rounded border border-pm-border-2 bg-pm-surface px-2 py-1.5 text-[13px] text-pm-text outline-none focus:border-pm-orange"
               />
               <button
                 type="button"
-                onClick={addRootCause}
+                onClick={addVarianceCause}
+                className="rounded-md bg-pm-orange px-4 py-1.5 text-[13px] font-medium text-white hover:bg-pm-orange-hover"
+              >
+                Add
+              </button>
+            </div>
+          </section>
+
+          <section className="mb-5 rounded-lg border border-pm-border bg-pm-surface p-5">
+            <div className="mb-1 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
+              Loss reasons
+            </div>
+            <p className="mb-3 text-[12px] text-pm-text-3">
+              Why customers don't proceed with a quoted job. Surfaced as a picker on Unsuccessful jobs in the QMT.
+            </p>
+
+            <div className="flex flex-col gap-1.5">
+              {lossReasons.map((c) => (
+                <div key={c} className="flex items-center gap-2 rounded-md border border-pm-border bg-pm-bg px-3 py-2">
+                  <span className="flex-1 text-[13px] text-pm-text">{c}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeLossReason(c)}
+                    className="rounded border border-pm-border-2 px-2 py-1 text-[11px] text-pm-text-3 hover:border-pm-red hover:text-pm-red"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-pm-border pt-3">
+              <input
+                type="text"
+                placeholder="New loss reason"
+                value={newReason}
+                onChange={(e) => setNewReason(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addLossReason())}
+                className="flex-1 min-w-[180px] rounded border border-pm-border-2 bg-pm-surface px-2 py-1.5 text-[13px] text-pm-text outline-none focus:border-pm-orange"
+              />
+              <button
+                type="button"
+                onClick={addLossReason}
                 className="rounded-md bg-pm-orange px-4 py-1.5 text-[13px] font-medium text-white hover:bg-pm-orange-hover"
               >
                 Add

@@ -24,6 +24,16 @@ function fmtPerHour(n) {
   return `${n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })}/hr`;
 }
 
+// Which reason list a job needs (if any). Negative-variance Completed →
+// variance cause. Unsuccessful → loss reason. Otherwise: not applicable.
+function reasonContextFor(job) {
+  if (job.status === 'Unsuccessful') return 'loss';
+  if (job.status === 'Completed' && job.actual && job.estimated) {
+    if (job.actual.marginIncLabour < job.estimated.marginIncLabour) return 'variance';
+  }
+  return null;
+}
+
 function fmtDate(s) {
   if (!s) return '—';
   const d = new Date(s.replace ? s.replace(' ', 'T') : s);
@@ -382,6 +392,39 @@ export default function QmtClient() {
     setRange({ ...r, preset: id });
   }
 
+  async function setJobReason(job, reason, reasonType) {
+    // Optimistic update
+    setData((prev) => ({
+      ...prev,
+      jobs: prev.jobs.map((j) =>
+        j.uuid === job.uuid
+          ? { ...j, assignedReason: reason || undefined, assignedReasonType: reason ? reasonType : undefined }
+          : j,
+      ),
+    }));
+    try {
+      const res = reason
+        ? await fetch('/api/qmt/reasons', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uuid: job.uuid, reason, reasonType }),
+          })
+        : await fetch(`/api/qmt/reasons?uuid=${job.uuid}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      // Rollback
+      setData((prev) => ({
+        ...prev,
+        jobs: prev.jobs.map((j) =>
+          j.uuid === job.uuid
+            ? { ...j, assignedReason: job.assignedReason, assignedReasonType: job.assignedReasonType }
+            : j,
+        ),
+      }));
+      alert(`Failed to save reason: ${e.message}`);
+    }
+  }
+
   async function toggleExclude(job) {
     const willExclude = !job.userExcluded;
     // Optimistic update — flip the flag locally so UI responds instantly.
@@ -564,6 +607,8 @@ export default function QmtClient() {
 
           <ByJobTypeTable rows={byJobType} />
 
+          <ReasonsBreakdown filtered={filtered} />
+
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-[11px] uppercase tracking-[0.05em] text-pm-text-3">Filter:</span>
             <MultiSelect
@@ -625,6 +670,7 @@ export default function QmtClient() {
                   <th className="px-3 py-1.5"></th>
                   <th className="px-3 py-1.5"></th>
                   <th className="px-3 py-1.5"></th>
+                  <th className="px-3 py-1.5"></th>
                 </tr>
                 <tr className="border-b border-pm-border bg-pm-bg/50">
                   <Th onClick={() => toggleSort('date')} active={sortKey === 'date'} dir={sortDir}>Date</Th>
@@ -640,13 +686,14 @@ export default function QmtClient() {
                   <Th onClick={() => toggleSort('actual.marginIncLabour')} active={sortKey === 'actual.marginIncLabour'} dir={sortDir} align="right">M%</Th>
                   <th className="px-3 py-2 font-medium text-right border-l border-pm-border">M% Δ</th>
                   <th className="px-3 py-2 font-medium text-right border-l border-pm-border">$/hr</th>
+                  <th className="px-3 py-2 font-medium text-center" title="Reason (variance / loss)">📝</th>
                   <th className="px-3 py-2 font-medium text-right" title="Exclude from KPIs">⊘</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="px-4 py-10 text-center text-sm text-pm-text-3">
+                    <td colSpan={15} className="px-4 py-10 text-center text-sm text-pm-text-3">
                       No jobs match your filter.
                     </td>
                   </tr>
@@ -723,6 +770,14 @@ export default function QmtClient() {
                             );
                           })()}
                         </td>
+                        <td className="px-3 py-1.5">
+                          <ReasonCell
+                            job={j}
+                            varianceCauses={data.varianceCauses || []}
+                            lossReasons={data.lossReasons || []}
+                            onChange={(reason, type) => setJobReason(j, reason, type)}
+                          />
+                        </td>
                         <td className="px-3 py-1.5 text-right">
                           <button
                             type="button"
@@ -754,7 +809,17 @@ export default function QmtClient() {
       ) : null}
 
       {openJobUuid && (
-        <JobDetailDrawer uuid={openJobUuid} onClose={() => setOpenJobUuid(null)} />
+        <JobDetailDrawer
+          uuid={openJobUuid}
+          job={data?.jobs?.find((j) => j.uuid === openJobUuid)}
+          varianceCauses={data?.varianceCauses || []}
+          lossReasons={data?.lossReasons || []}
+          onReasonChange={(reason, type) => {
+            const job = data?.jobs?.find((j) => j.uuid === openJobUuid);
+            if (job) setJobReason(job, reason, type);
+          }}
+          onClose={() => setOpenJobUuid(null)}
+        />
       )}
     </main>
   );
@@ -783,6 +848,201 @@ function Th({ children, onClick, active, dir, align = 'left' }) {
     >
       {children} {active ? (dir === 'asc' ? '↑' : '↓') : ''}
     </th>
+  );
+}
+
+function ReasonCell({ job, varianceCauses, lossReasons, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    function onDoc(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const ctx = reasonContextFor(job);
+  if (!ctx) return <span className="text-pm-text-3">—</span>;
+
+  const options = ctx === 'variance' ? varianceCauses : lossReasons;
+  const current = job.assignedReason;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        title={current ? `${current} (click to change)` : 'Add reason'}
+        className={`rounded px-1.5 py-0.5 text-[11px] no-underline ${
+          current
+            ? ctx === 'variance'
+              ? 'bg-pm-red-bg text-pm-red'
+              : 'bg-pm-ocean/15 text-pm-ocean'
+            : 'text-pm-text-3 hover:bg-pm-surface-2 hover:text-pm-text'
+        }`}
+      >
+        {current ? truncate(current, 22) : '+ Add'}
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 z-30 mt-1 w-64 overflow-y-auto rounded-md border border-pm-border bg-pm-surface shadow-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="border-b border-pm-border px-3 py-1.5 font-condensed text-[10px] font-bold uppercase tracking-[0.08em] text-pm-text-3">
+            {ctx === 'variance' ? 'Variance cause' : 'Loss reason'}
+          </div>
+          {options.length === 0 && (
+            <div className="px-3 py-2 text-[11px] italic text-pm-text-3">
+              No options — add some in Settings
+            </div>
+          )}
+          {options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => { onChange(opt, ctx); setOpen(false); }}
+              className={`block w-full px-3 py-1.5 text-left text-[12px] hover:bg-pm-surface-2 ${
+                current === opt ? 'text-pm-orange font-medium' : 'text-pm-text'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+          {current && (
+            <button
+              type="button"
+              onClick={() => { onChange(null, ctx); setOpen(false); }}
+              className="block w-full border-t border-pm-border px-3 py-1.5 text-left text-[11px] text-pm-text-3 hover:bg-pm-surface-2 hover:text-pm-text"
+            >
+              Clear reason
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function truncate(s, n) {
+  if (!s) return '';
+  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
+}
+
+function ReasonsBreakdown({ filtered }) {
+  const variance = useMemo(() => {
+    const buckets = new Map();
+    filtered.forEach((p) => {
+      if (p.status !== 'Completed') return;
+      if (!p.actual || !p.estimated) return;
+      if (p.actual.marginIncLabour >= p.estimated.marginIncLabour) return;
+      const reason = p.assignedReason && p.assignedReasonType === 'variance'
+        ? p.assignedReason
+        : 'Unassigned';
+      const shortfall = p.estimated.gpIncLabour - p.actual.gpIncLabour;
+      if (!buckets.has(reason)) buckets.set(reason, { reason, count: 0, shortfall: 0 });
+      const b = buckets.get(reason);
+      b.count += 1;
+      b.shortfall += shortfall;
+    });
+    return Array.from(buckets.values()).sort((a, b) => b.shortfall - a.shortfall);
+  }, [filtered]);
+
+  const loss = useMemo(() => {
+    const buckets = new Map();
+    filtered.forEach((p) => {
+      if (p.status !== 'Unsuccessful') return;
+      const reason = p.assignedReason && p.assignedReasonType === 'loss'
+        ? p.assignedReason
+        : 'Unassigned';
+      const value = p.estimated?.totalRevenue || 0;
+      if (!buckets.has(reason)) buckets.set(reason, { reason, count: 0, value: 0 });
+      const b = buckets.get(reason);
+      b.count += 1;
+      b.value += value;
+    });
+    return Array.from(buckets.values()).sort((a, b) => b.value - a.value);
+  }, [filtered]);
+
+  if (variance.length === 0 && loss.length === 0) return null;
+
+  return (
+    <div className="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-3">
+      {variance.length > 0 && (
+        <div className="rounded-lg border border-pm-border bg-pm-surface overflow-hidden">
+          <div className="border-b border-pm-border px-4 py-2 font-condensed text-[11px] font-bold uppercase tracking-[0.1em] text-pm-red">
+            Why margins slipped — Completed
+          </div>
+          <table className="w-full text-[12.5px]">
+            <thead className="text-left text-[10px] uppercase tracking-[0.05em] text-pm-text-3">
+              <tr className="border-b border-pm-border">
+                <th className="px-3 py-2 font-medium">Reason</th>
+                <th className="px-3 py-2 font-medium text-right">Jobs</th>
+                <th className="px-3 py-2 font-medium text-right">$ Shortfall</th>
+              </tr>
+            </thead>
+            <tbody>
+              {variance.map((r) => (
+                <tr key={r.reason} className="border-b border-pm-border last:border-b-0">
+                  <td className="px-3 py-2">
+                    {r.reason === 'Unassigned' ? (
+                      <span className="italic text-pm-text-3">Unassigned</span>
+                    ) : (
+                      r.reason
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">{r.count}</td>
+                  <td className="px-3 py-2 text-right font-mono text-pm-red">
+                    {r.shortfall.toLocaleString('en-AU', {
+                      style: 'currency',
+                      currency: 'AUD',
+                      maximumFractionDigits: 0,
+                    })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {loss.length > 0 && (
+        <div className="rounded-lg border border-pm-border bg-pm-surface overflow-hidden">
+          <div className="border-b border-pm-border px-4 py-2 font-condensed text-[11px] font-bold uppercase tracking-[0.1em] text-pm-ocean">
+            Why we lost quotes — Unsuccessful
+          </div>
+          <table className="w-full text-[12.5px]">
+            <thead className="text-left text-[10px] uppercase tracking-[0.05em] text-pm-text-3">
+              <tr className="border-b border-pm-border">
+                <th className="px-3 py-2 font-medium">Reason</th>
+                <th className="px-3 py-2 font-medium text-right">Jobs</th>
+                <th className="px-3 py-2 font-medium text-right">Value lost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loss.map((r) => (
+                <tr key={r.reason} className="border-b border-pm-border last:border-b-0">
+                  <td className="px-3 py-2">
+                    {r.reason === 'Unassigned' ? (
+                      <span className="italic text-pm-text-3">Unassigned</span>
+                    ) : (
+                      r.reason
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">{r.count}</td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {r.value.toLocaleString('en-AU', {
+                      style: 'currency',
+                      currency: 'AUD',
+                      maximumFractionDigits: 0,
+                    })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
 

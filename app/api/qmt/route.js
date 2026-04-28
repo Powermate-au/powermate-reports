@@ -16,6 +16,59 @@ import {
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
+async function loadReasons() {
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'QMT Reasons',
+    });
+    const map = new Map();
+    (res.data.values || []).slice(1).forEach((r) => {
+      const [uuid, reason, reasonType] = r;
+      if (uuid && reason) map.set(uuid, { reason, reasonType: reasonType || '' });
+    });
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+async function loadReasonLists() {
+  // Loaded for the Settings page — included in /api/qmt response so the
+  // QMT page can render the picker without an extra round trip.
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Config',
+    });
+    const variance = [];
+    const loss = [];
+    (res.data.values || []).slice(1).forEach(([k, v]) => {
+      if ((k === 'variance_cause' || k === 'root_cause') && v) variance.push(v);
+      else if (k === 'loss_reason' && v) loss.push(v);
+    });
+    return { varianceCauses: variance, lossReasons: loss };
+  } catch {
+    return { varianceCauses: [], lossReasons: [] };
+  }
+}
+
 async function loadExcludedUuids() {
   try {
     const auth = new google.auth.GoogleAuth({
@@ -119,7 +172,15 @@ export async function GET(request) {
       { jobs, lineItems, contacts, companies, materials, activities, staff },
       config,
       excludedUuids,
-    ] = await Promise.all([loadAll({ fresh }), loadConfig(), loadExcludedUuids()]);
+      reasonsByUuid,
+      reasonLists,
+    ] = await Promise.all([
+      loadAll({ fresh }),
+      loadConfig(),
+      loadExcludedUuids(),
+      loadReasons(),
+      loadReasonLists(),
+    ]);
     const { jobTypes, targets } = config;
 
     let filteredJobs = jobs;
@@ -139,7 +200,7 @@ export async function GET(request) {
       );
     }
 
-    const processed = processJobs({
+    const processedRaw = processJobs({
       jobs: filteredJobs,
       lineItems,
       contacts,
@@ -149,6 +210,13 @@ export async function GET(request) {
       staff,
       jobTypes,
       excludedUuids,
+    });
+    // Attach assigned reason (if any) to each processed job
+    const processed = processedRaw.map((p) => {
+      const r = reasonsByUuid.get(p.uuid);
+      return r
+        ? { ...p, assignedReason: r.reason, assignedReasonType: r.reasonType }
+        : p;
     });
 
     return NextResponse.json({
@@ -166,6 +234,8 @@ export async function GET(request) {
       jobs: processed,
       jobTypes,
       targets,
+      varianceCauses: reasonLists.varianceCauses,
+      lossReasons: reasonLists.lossReasons,
     });
   } catch (error) {
     console.error('QMT API error:', error);

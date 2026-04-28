@@ -38,15 +38,19 @@ async function ensureTab(sheets) {
 //   root_cause | Poor Estimating | (label unused)
 function parseRows(rows) {
   const jobTypesByTag = new Map();
-  const rootCauses = [];
+  const varianceCauses = [];
+  const lossReasons = [];
   const targets = {};
   rows.forEach(([key, value, label]) => {
     if (!key) return;
     if (key === 'job_type' && value) {
       const existing = jobTypesByTag.get(value) || {};
       jobTypesByTag.set(value, { ...existing, tag: value, label: label || value });
-    } else if (key === 'root_cause' && value) {
-      rootCauses.push(value);
+    } else if ((key === 'variance_cause' || key === 'root_cause') && value) {
+      // root_cause is the legacy key — read both, write the new one.
+      varianceCauses.push(value);
+    } else if (key === 'loss_reason' && value) {
+      lossReasons.push(value);
     } else if (key === 'target_inc_labour' && value) {
       targets.incLabour = parseFloat(value);
     } else if (key === 'target_ex_labour' && value) {
@@ -67,7 +71,13 @@ function parseRows(rows) {
       jobTypesByTag.set(tag, { ...existing, targetEx: parseFloat(value) });
     }
   });
-  return { jobTypes: Array.from(jobTypesByTag.values()), rootCauses, targets };
+  return {
+    jobTypes: Array.from(jobTypesByTag.values()),
+    varianceCauses,
+    lossReasons,
+    rootCauses: varianceCauses, // back-compat alias
+    targets,
+  };
 }
 
 export async function GET() {
@@ -90,7 +100,12 @@ export async function PUT(request) {
   try {
     const body = await request.json();
     const jobTypes = Array.isArray(body.jobTypes) ? body.jobTypes : [];
-    const rootCauses = Array.isArray(body.rootCauses) ? body.rootCauses : [];
+    const varianceCauses = Array.isArray(body.varianceCauses)
+      ? body.varianceCauses
+      : Array.isArray(body.rootCauses)
+      ? body.rootCauses
+      : [];
+    const lossReasons = Array.isArray(body.lossReasons) ? body.lossReasons : [];
     const targets = body.targets || {};
 
     const sheets = await getSheets();
@@ -110,8 +125,11 @@ export async function PUT(request) {
         values.push([`target_dph_${t.tag}`, String(t.targetDollarsPerHour), '']);
       }
     });
-    rootCauses.forEach((c) => {
-      if (c) values.push(['root_cause', c, '']);
+    varianceCauses.forEach((c) => {
+      if (c) values.push(['variance_cause', c, '']);
+    });
+    lossReasons.forEach((c) => {
+      if (c) values.push(['loss_reason', c, '']);
     });
     if (Number.isFinite(targets.incLabour)) {
       values.push(['target_inc_labour', String(targets.incLabour), 'Inc Labour margin target']);

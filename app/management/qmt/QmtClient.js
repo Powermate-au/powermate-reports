@@ -314,6 +314,61 @@ export default function QmtClient() {
     return { rows, total };
   }, [filtered, data]);
 
+  // Per-job-type breakdown using SM8's quote_sent flag so the Win % reflects
+  // only quotes that actually went out to a customer (not pre-quote dropouts).
+  const byJobType = useMemo(() => {
+    const buckets = new Map();
+    const labelByTag = new Map((data?.jobTypes || []).map((t) => [t.tag, t.label]));
+    labelByTag.set('untagged', 'Untagged');
+    filtered.forEach((p) => {
+      if (p.excludedFromKpis) return;
+      if (!p.quoteSent) return;
+      const k = p.jobType;
+      if (!buckets.has(k)) {
+        buckets.set(k, {
+          tag: k,
+          label: labelByTag.get(k) || k,
+          sent: 0,
+          won: 0,
+          lost: 0,
+          estRevenue: 0,
+          estGpInc: 0,
+          actRevenue: 0,
+          actGpInc: 0,
+          estGpEx: 0,
+          actGpEx: 0,
+          estHours: 0,
+          actHours: 0,
+        });
+      }
+      const b = buckets.get(k);
+      b.sent += 1;
+      b.estRevenue += p.estimated.totalRevenue;
+      b.estGpInc += p.estimated.gpIncLabour;
+      b.estGpEx += p.estimated.gpExLabour;
+      b.estHours += p.estimated.labour.hours || 0;
+      if (p.status === 'Work Order' || p.status === 'Completed') b.won += 1;
+      else if (p.status === 'Unsuccessful') b.lost += 1;
+      if (p.actual) {
+        b.actRevenue += p.actual.totalRevenue;
+        b.actGpInc += p.actual.gpIncLabour;
+        b.actGpEx += p.actual.gpExLabour;
+        b.actHours += p.actual.labour.hours || 0;
+      }
+    });
+    return Array.from(buckets.values())
+      .map((b) => ({
+        ...b,
+        decided: b.won + b.lost,
+        winRatio: b.won + b.lost > 0 ? b.won / (b.won + b.lost) : null,
+        estMarginInc: b.estRevenue > 0 ? b.estGpInc / b.estRevenue : null,
+        actMarginInc: b.actRevenue > 0 ? b.actGpInc / b.actRevenue : null,
+        estDollarsPerHour: b.estHours > 0 ? b.estGpEx / b.estHours : null,
+        actDollarsPerHour: b.actHours > 0 ? b.actGpEx / b.actHours : null,
+      }))
+      .sort((a, b) => b.sent - a.sent);
+  }, [filtered, data]);
+
   function toggleSort(key) {
     if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
     else {
@@ -506,6 +561,8 @@ export default function QmtClient() {
               excludedCount: filtered.filter((j) => j.excludedFromKpis).length,
             })}
           />
+
+          <ByJobTypeTable rows={byJobType} />
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-[11px] uppercase tracking-[0.05em] text-pm-text-3">Filter:</span>
@@ -726,6 +783,97 @@ function Th({ children, onClick, active, dir, align = 'left' }) {
     >
       {children} {active ? (dir === 'asc' ? '↑' : '↓') : ''}
     </th>
+  );
+}
+
+function ByJobTypeTable({ rows }) {
+  if (!rows || rows.length === 0) return null;
+  const totals = rows.reduce(
+    (acc, r) => {
+      acc.sent += r.sent;
+      acc.won += r.won;
+      acc.lost += r.lost;
+      acc.estRevenue += r.estRevenue;
+      acc.estGpInc += r.estGpInc;
+      acc.estGpEx += r.estGpEx;
+      acc.estHours += r.estHours;
+      acc.actRevenue += r.actRevenue;
+      acc.actGpInc += r.actGpInc;
+      acc.actGpEx += r.actGpEx;
+      acc.actHours += r.actHours;
+      return acc;
+    },
+    { sent: 0, won: 0, lost: 0, estRevenue: 0, estGpInc: 0, estGpEx: 0, estHours: 0, actRevenue: 0, actGpInc: 0, actGpEx: 0, actHours: 0 },
+  );
+  const totalDecided = totals.won + totals.lost;
+  const total = {
+    label: 'Total',
+    ...totals,
+    decided: totalDecided,
+    winRatio: totalDecided > 0 ? totals.won / totalDecided : null,
+    estMarginInc: totals.estRevenue > 0 ? totals.estGpInc / totals.estRevenue : null,
+    actMarginInc: totals.actRevenue > 0 ? totals.actGpInc / totals.actRevenue : null,
+    estDollarsPerHour: totals.estHours > 0 ? totals.estGpEx / totals.estHours : null,
+    actDollarsPerHour: totals.actHours > 0 ? totals.actGpEx / totals.actHours : null,
+  };
+
+  const cellMargin = (m) =>
+    m === null || m === undefined ? '—' : `${(m * 100).toFixed(1)}%`;
+  const cellMoneyHr = (n) =>
+    n === null || n === undefined
+      ? '—'
+      : `${n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })}/hr`;
+
+  const renderRow = (r, isTotal = false) => (
+    <tr
+      key={r.tag || 'total'}
+      className={
+        isTotal
+          ? 'border-t-2 border-pm-border bg-pm-bg/30 font-medium'
+          : 'border-b border-pm-border last:border-b-0'
+      }
+    >
+      <td className="px-3 py-2">{r.label}</td>
+      <td className="px-3 py-2 text-right font-mono">{r.sent}</td>
+      <td className="px-3 py-2 text-right font-mono text-pm-green">{r.won}</td>
+      <td className="px-3 py-2 text-right font-mono text-pm-red">{r.lost}</td>
+      <td className="px-3 py-2 text-right font-mono">
+        {r.winRatio === null ? '—' : `${(r.winRatio * 100).toFixed(0)}%`}
+      </td>
+      <td className="px-3 py-2 text-right font-mono border-l border-pm-border text-pm-text-3">
+        {cellMargin(r.estMarginInc)}
+      </td>
+      <td className="px-3 py-2 text-right font-mono">{cellMargin(r.actMarginInc)}</td>
+      <td className="px-3 py-2 text-right font-mono border-l border-pm-border text-pm-text-3">
+        {cellMoneyHr(r.estDollarsPerHour)}
+      </td>
+      <td className="px-3 py-2 text-right font-mono">{cellMoneyHr(r.actDollarsPerHour)}</td>
+    </tr>
+  );
+
+  return (
+    <div className="mb-6 rounded-lg border border-pm-border bg-pm-surface overflow-x-auto">
+      <div className="border-b border-pm-border px-4 py-2 font-condensed text-[11px] font-bold uppercase tracking-[0.1em] text-pm-orange">
+        By job type — quotes sent
+      </div>
+      <table className="w-full text-[12.5px]">
+        <thead className="text-left text-[10px] uppercase tracking-[0.05em] text-pm-text-3">
+          <tr className="border-b border-pm-border">
+            <th className="px-3 py-2 font-medium">Type</th>
+            <th className="px-3 py-2 font-medium text-right">Sent</th>
+            <th className="px-3 py-2 font-medium text-right">Won</th>
+            <th className="px-3 py-2 font-medium text-right">Lost</th>
+            <th className="px-3 py-2 font-medium text-right">Win %</th>
+            <th className="px-3 py-2 font-medium text-right border-l border-pm-border">Est M%</th>
+            <th className="px-3 py-2 font-medium text-right">Act M%</th>
+            <th className="px-3 py-2 font-medium text-right border-l border-pm-border">Est $/hr</th>
+            <th className="px-3 py-2 font-medium text-right">Act $/hr</th>
+          </tr>
+        </thead>
+        <tbody>{rows.map((r) => renderRow(r))}</tbody>
+        <tfoot>{renderRow(total, true)}</tfoot>
+      </table>
+    </div>
   );
 }
 

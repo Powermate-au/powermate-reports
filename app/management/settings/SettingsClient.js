@@ -19,69 +19,65 @@ function slugify(s) {
     .slice(0, 24);
 }
 
-// Money input — same local-string-state pattern as PercentInput but the
-// stored value is a plain dollar number (e.g. 150 for $150/hr).
-function MoneyInput({ value, onChange, placeholder = '—', className = '' }) {
-  const initial = Number.isFinite(value) ? String(value) : '';
-  const [text, setText] = useState(initial);
+// Generic numeric input that holds local string state during editing so
+// users can type freely without reformatting eating their keystrokes.
+// Commits the parsed numeric value on blur.
+//
+//   format(value)     → string for display
+//   parse(text)       → number to store, or undefined to clear
+function NumericInput({ value, onChange, format, parse, step, placeholder = '—', className = '' }) {
+  const [text, setText] = useState(format(value));
   const [focused, setFocused] = useState(false);
   useEffect(() => {
-    if (!focused) {
-      setText(Number.isFinite(value) ? String(value) : '');
-    }
-  }, [value, focused]);
+    if (!focused) setText(format(value));
+  }, [value, focused, format]);
   return (
     <input
       type="number"
-      step="1"
+      step={step}
       placeholder={placeholder}
       value={text}
       onFocus={() => setFocused(true)}
       onChange={(e) => setText(e.target.value)}
       onBlur={() => {
         setFocused(false);
-        const t = text.trim();
-        if (t === '') onChange(undefined);
-        else {
-          const n = parseFloat(t);
-          onChange(Number.isFinite(n) ? n : undefined);
-        }
+        onChange(parse(text));
       }}
       className={className}
     />
   );
 }
 
-// Number-as-percentage input: holds local string state so users can type
-// freely without toFixed reformatting eating their keystrokes. Commits the
-// numeric value (decimal, e.g. 0.425 for 42.5%) on blur.
-function PercentInput({ value, onChange, placeholder = '—', className = '' }) {
-  const initial = Number.isFinite(value) ? (value * 100).toFixed(1) : '';
-  const [text, setText] = useState(initial);
-  const [focused, setFocused] = useState(false);
-  useEffect(() => {
-    if (!focused) {
-      setText(Number.isFinite(value) ? (value * 100).toFixed(1) : '');
-    }
-  }, [value, focused]);
+// Stored value is dollars (e.g. 150 for $150/hr).
+function MoneyInput(props) {
   return (
-    <input
-      type="number"
-      step="0.1"
-      placeholder={placeholder}
-      value={text}
-      onFocus={() => setFocused(true)}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={() => {
-        setFocused(false);
-        const t = text.trim();
-        if (t === '') onChange(undefined);
-        else {
-          const n = parseFloat(t);
-          onChange(Number.isFinite(n) ? n / 100 : undefined);
-        }
+    <NumericInput
+      {...props}
+      step="1"
+      format={(v) => (Number.isFinite(v) ? String(v) : '')}
+      parse={(t) => {
+        const trimmed = t.trim();
+        if (trimmed === '') return undefined;
+        const n = parseFloat(trimmed);
+        return Number.isFinite(n) ? n : undefined;
       }}
-      className={className}
+    />
+  );
+}
+
+// Stored value is a decimal fraction (e.g. 0.425 for 42.5%).
+function PercentInput(props) {
+  return (
+    <NumericInput
+      {...props}
+      step="0.1"
+      format={(v) => (Number.isFinite(v) ? (v * 100).toFixed(1) : '')}
+      parse={(t) => {
+        const trimmed = t.trim();
+        if (trimmed === '') return undefined;
+        const n = parseFloat(trimmed);
+        return Number.isFinite(n) ? n / 100 : undefined;
+      }}
     />
   );
 }

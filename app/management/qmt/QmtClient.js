@@ -20,17 +20,9 @@ import ReasonCell from './ReasonCell';
 import ReasonsBreakdown from './ReasonsBreakdown';
 import ByJobTypeTable from './ByJobTypeTable';
 import AnalysisWindow from './AnalysisWindow';
+import { ymd } from '@/lib/dates';
 
 const STATUS_ORDER = ['Quote', 'Work Order', 'Completed', 'Unsuccessful'];
-
-function ymd(d) {
-  // Use local date parts — toISOString() shifts to UTC and breaks
-  // start/end-of-month calculations for non-UTC timezones (e.g. AEST).
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 function startOfMonth(d) {
   return new Date(d.getFullYear(), d.getMonth(), 1);

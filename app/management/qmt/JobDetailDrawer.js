@@ -254,15 +254,15 @@ export default function JobDetailDrawer({
                   </thead>
                   <tbody>
                     {data.activities.map((a) => (
-                      <tr key={a.uuid} className={`border-b border-pm-border/50 last:border-b-0 ${a.activity_was_recorded == 1 ? '' : 'opacity-50'}`}>
+                      <tr key={a.uuid} className={`border-b border-pm-border/50 last:border-b-0 ${(a.activity_was_recorded === 1 || a.activity_was_recorded === '1') ? '' : 'opacity-50'}`}>
                         <td className="py-1.5">{a._staffName || '—'}</td>
                         <td className="py-1.5 font-mono text-[10px] text-pm-text-3">{fmtDateTime(a.start_date)}</td>
                         <td className="py-1.5 font-mono text-[10px] text-pm-text-3">{fmtDateTime(a.end_date)}</td>
                         <td className="py-1.5 text-right font-mono">{fmtNum(a._hours, 2)}</td>
                         <td className="py-1.5 text-[10px]">
-                          {a.activity_was_recorded == 1 ? (
+                          {(a.activity_was_recorded === 1 || a.activity_was_recorded === '1') ? (
                             <span className="rounded bg-pm-green-bg px-1.5 py-0.5 text-pm-green">Recorded</span>
-                          ) : a.activity_was_scheduled == 1 ? (
+                          ) : (a.activity_was_scheduled === 1 || a.activity_was_scheduled === '1') ? (
                             <span className="rounded bg-pm-surface-2 px-1.5 py-0.5 text-pm-text-3">Scheduled</span>
                           ) : (
                             <span className="text-pm-text-3">—</span>

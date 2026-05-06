@@ -14,7 +14,7 @@ const TILES = [
   {
     href: '/management/settings',
     title: 'Settings',
-    desc: 'Manage job type tags, root causes, and other config.',
+    desc: 'Manage job type tags, margin and \$/hr targets, variance causes and loss reasons.',
   },
 ];
 

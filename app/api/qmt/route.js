@@ -37,7 +37,8 @@ async function loadReasons() {
       if (uuid && reason) map.set(uuid, { reason, reasonType: reasonType || '' });
     });
     return map;
-  } catch {
+  } catch (e) {
+    console.error('loadReasons failed — falling back to empty map:', e.message);
     return new Map();
   }
 }
@@ -65,7 +66,8 @@ async function loadReasonLists() {
       else if (k === 'loss_reason' && v) loss.push(v);
     });
     return { varianceCauses: variance, lossReasons: loss };
-  } catch {
+  } catch (e) {
+    console.error('loadReasonLists failed — falling back to empty lists:', e.message);
     return { varianceCauses: [], lossReasons: [] };
   }
 }
@@ -85,7 +87,8 @@ async function loadExcludedUuids() {
       range: 'QMT Excluded',
     });
     return (res.data.values || []).slice(1).map((r) => r[0]).filter(Boolean);
-  } catch {
+  } catch (e) {
+    console.error('loadExcludedUuids failed — falling back to empty:', e.message);
     return [];
   }
 }
@@ -139,7 +142,8 @@ async function loadConfig() {
       jobTypes: types.length > 0 ? types : DEFAULT_JOB_TYPES,
       targets,
     };
-  } catch {
+  } catch (e) {
+    console.error('loadConfig failed — falling back to defaults:', e.message);
     return {
       jobTypes: DEFAULT_JOB_TYPES,
       targets: {

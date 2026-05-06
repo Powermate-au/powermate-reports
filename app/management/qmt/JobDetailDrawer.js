@@ -1,45 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-function fmtMoney(n, dp = 0) {
-  if (n === null || n === undefined || isNaN(n)) return '—';
-  return n.toLocaleString('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    maximumFractionDigits: dp,
-    minimumFractionDigits: dp,
-  });
-}
-
-function fmtNum(n, dp = 2) {
-  if (n === null || n === undefined || isNaN(n)) return '—';
-  return Number(n).toLocaleString('en-AU', { maximumFractionDigits: dp, minimumFractionDigits: dp });
-}
-
-function fmtPct(n) {
-  if (n === null || n === undefined || isNaN(n)) return '—';
-  return `${(n * 100).toFixed(1)}%`;
-}
-
-function fmtPerHour(n) {
-  if (n === null || n === undefined || isNaN(n)) return '—';
-  return `${n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })}/hr`;
-}
-
-function fmtDateTime(s) {
-  if (!s || s.startsWith('0000')) return '—';
-  const d = new Date(s.replace ? s.replace(' ', 'T') : s);
-  if (isNaN(d)) return s;
-  return d.toLocaleString('en-AU', { hour12: false });
-}
-
-function deltaCls(delta, goodDirection = 'up') {
-  if (delta === 0) return 'text-pm-text-3';
-  const positive = delta > 0;
-  const isGood = goodDirection === 'up' ? positive : !positive;
-  return isGood ? 'text-pm-green' : 'text-pm-red';
-}
+import {
+  fmtMoney,
+  fmtNum,
+  fmtPct,
+  fmtPerHour,
+  fmtDateTime,
+  deltaCls,
+  reasonContextFor,
+} from './format';
 
 export default function JobDetailDrawer({
   uuid,
@@ -391,15 +361,6 @@ function ComparisonRow({ label, estTime, actTime, estCost, actCost, invoiced, de
       <td className="px-4 py-2 text-right font-mono border-l border-pm-border text-pm-text-3">—</td>
     </tr>
   );
-}
-
-function reasonContextFor(job) {
-  if (!job) return null;
-  if (job.status === 'Unsuccessful') return 'loss';
-  if (job.status === 'Completed' && job.actual && job.estimated) {
-    if (job.actual.marginIncLabour < job.estimated.marginIncLabour) return 'variance';
-  }
-  return null;
 }
 
 function ReasonSection({ job, varianceCauses, lossReasons, onReasonChange }) {

@@ -2,66 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import JobDetailDrawer from './JobDetailDrawer';
+import {
+  fmtMoney,
+  fmtPct,
+  fmtPerHour,
+  fmtDate,
+  statusToneCls,
+  marginToneCls,
+  reasonContextFor,
+} from './format';
 
 const STATUS_ORDER = ['Quote', 'Work Order', 'Completed', 'Unsuccessful'];
-
-function fmtMoney(n) {
-  if (n === null || n === undefined || isNaN(n)) return '—';
-  return n.toLocaleString('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    maximumFractionDigits: 0,
-  });
-}
-
-function fmtPct(n) {
-  if (n === null || n === undefined || isNaN(n)) return '—';
-  return `${(n * 100).toFixed(1)}%`;
-}
-
-function fmtPerHour(n) {
-  if (n === null || n === undefined || isNaN(n)) return '—';
-  return `${n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 })}/hr`;
-}
-
-// Which reason list a job needs (if any). Negative-variance Completed →
-// variance cause. Unsuccessful → loss reason. Otherwise: not applicable.
-function reasonContextFor(job) {
-  if (job.status === 'Unsuccessful') return 'loss';
-  if (job.status === 'Completed' && job.actual && job.estimated) {
-    if (job.actual.marginIncLabour < job.estimated.marginIncLabour) return 'variance';
-  }
-  return null;
-}
-
-function fmtDate(s) {
-  if (!s) return '—';
-  const d = new Date(s.replace ? s.replace(' ', 'T') : s);
-  if (isNaN(d)) return s;
-  return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: '2-digit' });
-}
-
-function statusToneCls(status) {
-  switch (status) {
-    case 'Quote':
-      return 'bg-pm-orange-bg text-pm-orange';
-    case 'Work Order':
-      return 'bg-pm-ocean/10 text-pm-ocean';
-    case 'Completed':
-      return 'bg-pm-green-bg text-pm-green';
-    case 'Unsuccessful':
-      return 'bg-pm-red-bg text-pm-red';
-    default:
-      return 'bg-pm-surface-2 text-pm-text-3';
-  }
-}
-
-function marginToneCls(margin, target = 0.3) {
-  if (margin === null || margin === undefined || isNaN(margin)) return 'text-pm-text-3';
-  if (margin >= target) return 'text-pm-green';
-  if (margin >= target - 0.15) return 'text-pm-text';
-  return 'text-pm-red';
-}
 
 function ymd(d) {
   // Use local date parts — toISOString() shifts to UTC and breaks

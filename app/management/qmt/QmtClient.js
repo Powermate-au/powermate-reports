@@ -10,6 +10,7 @@ import {
   statusToneCls,
   marginToneCls,
   reasonContextFor,
+  getTarget,
 } from './format';
 
 const STATUS_ORDER = ['Quote', 'Work Order', 'Completed', 'Unsuccessful'];
@@ -135,33 +136,17 @@ export default function QmtClient() {
     if (filter.jobTypes.length > 0) rows = rows.filter((r) => filter.jobTypes.includes(r.jobType));
     if (filter.excludedOnly) rows = rows.filter((r) => r.excludedFromKpis);
     if (filter.belowDphTarget) {
-      const globalDph = data?.targets?.dollarsPerHour ?? 150;
-      const targetByTag = new Map(
-        (data?.jobTypes || []).map((t) => [
-          t.tag,
-          Number.isFinite(t.targetDollarsPerHour) ? t.targetDollarsPerHour : globalDph,
-        ]),
-      );
       rows = rows.filter((r) => {
         const side = r.actual || r.estimated;
         if (!side || side.dollarsPerHour === null || side.dollarsPerHour === undefined) return false;
-        const tgt = targetByTag.get(r.jobType) ?? globalDph;
-        return side.dollarsPerHour < tgt;
+        return side.dollarsPerHour < getTarget(data, r.jobType, 'dph');
       });
     }
     if (filter.belowMarginTarget) {
-      const globalInc = data?.targets?.incLabour ?? 0.425;
-      const targetByTag = new Map(
-        (data?.jobTypes || []).map((t) => [
-          t.tag,
-          Number.isFinite(t.targetInc) ? t.targetInc : globalInc,
-        ]),
-      );
       rows = rows.filter((r) => {
         const side = r.actual || r.estimated;
         if (!side || side.marginIncLabour === null || side.marginIncLabour === undefined) return false;
-        const tgt = targetByTag.get(r.jobType) ?? globalInc;
-        return side.marginIncLabour < tgt;
+        return side.marginIncLabour < getTarget(data, r.jobType, 'inc');
       });
     }
     if (filter.belowQuotedMargin) {
@@ -197,19 +182,11 @@ export default function QmtClient() {
   // Filter-aware analysis window aggregation. Recomputes from filtered list
   // so the summary respects status/jobType/search filters.
   const summary = useMemo(() => {
-    const globalIncTarget = data?.targets?.incLabour ?? 0.425;
-    const globalExTarget = data?.targets?.exLabour ?? 0.593;
-    const globalDphTarget = data?.targets?.dollarsPerHour ?? 150;
-    const targetByTag = new Map();
-    (data?.jobTypes || []).forEach((t) => {
-      targetByTag.set(t.tag, {
-        inc: Number.isFinite(t.targetInc) ? t.targetInc : globalIncTarget,
-        ex: Number.isFinite(t.targetEx) ? t.targetEx : globalExTarget,
-        dph: Number.isFinite(t.targetDollarsPerHour) ? t.targetDollarsPerHour : globalDphTarget,
-      });
+    const targetsFor = (tag) => ({
+      inc: getTarget(data, tag, 'inc'),
+      ex: getTarget(data, tag, 'ex'),
+      dph: getTarget(data, tag, 'dph'),
     });
-    const targetsFor = (tag) =>
-      targetByTag.get(tag) || { inc: globalIncTarget, ex: globalExTarget, dph: globalDphTarget };
 
     const buckets = {};
     const ensure = (k) => {
@@ -745,9 +722,7 @@ export default function QmtClient() {
                         <td className={`px-3 py-1.5 text-right font-mono ${j.actual ? marginToneCls(j.actual.marginIncLabour) : 'text-pm-text-3'}`}>
                           {j.actual ? (
                             (() => {
-                              const globalInc = data?.targets?.incLabour ?? 0.425;
-                              const typeT = data?.jobTypes?.find((t) => t.tag === j.jobType);
-                              const tgt = Number.isFinite(typeT?.targetInc) ? typeT.targetInc : globalInc;
+                              const tgt = getTarget(data, j.jobType, 'inc');
                               const belowTarget = j.actual.marginIncLabour < tgt;
                               const belowQuoted =
                                 j.estimated && j.actual.marginIncLabour < j.estimated.marginIncLabour;
@@ -779,11 +754,7 @@ export default function QmtClient() {
                             const side = j.actual || j.estimated;
                             const dph = side?.dollarsPerHour;
                             if (dph === null || dph === undefined) return '—';
-                            const globalDph = data?.targets?.dollarsPerHour ?? 150;
-                            const typeT = data?.jobTypes?.find((t) => t.tag === j.jobType);
-                            const tgt = Number.isFinite(typeT?.targetDollarsPerHour)
-                              ? typeT.targetDollarsPerHour
-                              : globalDph;
+                            const tgt = getTarget(data, j.jobType, 'dph');
                             const below = dph < tgt;
                             return (
                               <span className={below ? 'text-pm-red' : 'text-pm-text'}>

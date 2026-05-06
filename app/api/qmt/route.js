@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { google } from 'googleapis';
 import { loadAll } from '@/lib/jobs-source';
 import {
   processJobs,
@@ -14,26 +13,14 @@ import {
   DEFAULT_TARGET_EX_LABOUR,
   DEFAULT_TARGET_DOLLARS_PER_HOUR,
 } from '@/lib/qmt-config';
-
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+import { getSheetsClient, readTabRows } from '@/lib/sheets-tab';
 
 async function loadReasons() {
   try {
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    });
-    const sheets = google.sheets({ version: 'v4', auth });
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'QMT Reasons',
-    });
+    const sheets = await getSheetsClient({ readonly: true });
+    const rows = await readTabRows(sheets, 'QMT Reasons');
     const map = new Map();
-    (res.data.values || []).slice(1).forEach((r) => {
-      const [uuid, reason, reasonType] = r;
+    rows.forEach(([uuid, reason, reasonType]) => {
       if (uuid && reason) map.set(uuid, { reason, reasonType: reasonType || '' });
     });
     return map;
@@ -47,21 +34,11 @@ async function loadReasonLists() {
   // Loaded for the Settings page — included in /api/qmt response so the
   // QMT page can render the picker without an extra round trip.
   try {
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    });
-    const sheets = google.sheets({ version: 'v4', auth });
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Config',
-    });
+    const sheets = await getSheetsClient({ readonly: true });
+    const rows = await readTabRows(sheets, 'Config');
     const variance = [];
     const loss = [];
-    (res.data.values || []).slice(1).forEach(([k, v]) => {
+    rows.forEach(([k, v]) => {
       if ((k === 'variance_cause' || k === 'root_cause') && v) variance.push(v);
       else if (k === 'loss_reason' && v) loss.push(v);
     });
@@ -74,19 +51,9 @@ async function loadReasonLists() {
 
 async function loadExcludedUuids() {
   try {
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    });
-    const sheets = google.sheets({ version: 'v4', auth });
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'QMT Excluded',
-    });
-    return (res.data.values || []).slice(1).map((r) => r[0]).filter(Boolean);
+    const sheets = await getSheetsClient({ readonly: true });
+    const rows = await readTabRows(sheets, 'QMT Excluded');
+    return rows.map((r) => r[0]).filter(Boolean);
   } catch (e) {
     console.error('loadExcludedUuids failed — falling back to empty:', e.message);
     return [];
@@ -95,19 +62,8 @@ async function loadExcludedUuids() {
 
 async function loadConfig() {
   try {
-    const auth = new google.auth.GoogleAuth({
-      credentials: {
-        client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      },
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    });
-    const sheets = google.sheets({ version: 'v4', auth });
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'Config',
-    });
-    const rows = (res.data.values || []).slice(1);
+    const sheets = await getSheetsClient({ readonly: true });
+    const rows = await readTabRows(sheets, 'Config');
     const typesByTag = new Map();
     rows.forEach(([k, v, label]) => {
       if (k === 'job_type' && v) {

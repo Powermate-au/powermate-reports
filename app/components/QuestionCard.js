@@ -1,7 +1,5 @@
 'use client';
 
-const labelCls = 'text-[11px] font-bold uppercase tracking-[0.09em] text-pm-text-3 font-condensed';
-
 function FollowUp({ id, label, placeholder, value, onChange, hasError }) {
   return (
     <div className="mt-2.5 border-t border-pm-border pt-3">
@@ -195,4 +193,3 @@ export default function QuestionCard({
   );
 }
 
-export { labelCls };

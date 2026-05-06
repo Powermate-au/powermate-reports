@@ -82,6 +82,62 @@ function PercentInput(props) {
   );
 }
 
+// Generic add/remove list section. Used for variance causes and loss reasons.
+// Manages its own draft state so the parent only needs to supply items + add/remove handlers.
+function EditableList({ title, description, items, placeholder, onAdd, onRemove }) {
+  const [draft, setDraft] = useState('');
+  function commit() {
+    const v = draft.trim();
+    if (!v) return;
+    onAdd(v);
+    setDraft('');
+  }
+  return (
+    <section className="mb-5 rounded-lg border border-pm-border bg-pm-surface p-5">
+      <div className="mb-1 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
+        {title}
+      </div>
+      <p className="mb-3 text-[12px] text-pm-text-3">{description}</p>
+
+      <div className="flex flex-col gap-1.5">
+        {items.map((c) => (
+          <div
+            key={c}
+            className="flex items-center gap-2 rounded-md border border-pm-border bg-pm-bg px-3 py-2"
+          >
+            <span className="flex-1 text-[13px] text-pm-text">{c}</span>
+            <button
+              type="button"
+              onClick={() => onRemove(c)}
+              className="rounded border border-pm-border-2 px-2 py-1 text-[11px] text-pm-text-3 hover:border-pm-red hover:text-pm-red"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-pm-border pt-3">
+        <input
+          type="text"
+          placeholder={placeholder}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), commit())}
+          className="flex-1 min-w-[180px] rounded border border-pm-border-2 bg-pm-surface px-2 py-1.5 text-[13px] text-pm-text outline-none focus:border-pm-orange"
+        />
+        <button
+          type="button"
+          onClick={commit}
+          className="rounded-md bg-pm-orange px-4 py-1.5 text-[13px] font-medium text-white hover:bg-pm-orange-hover"
+        >
+          Add
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export default function SettingsClient() {
   const [jobTypes, setJobTypes] = useState([]);
   const [varianceCauses, setVarianceCauses] = useState([]);
@@ -92,8 +148,6 @@ export default function SettingsClient() {
     dollarsPerHour: DEFAULT_TARGET_DOLLARS_PER_HOUR,
   });
   const [newType, setNewType] = useState({ tag: '', label: '' });
-  const [newCause, setNewCause] = useState('');
-  const [newReason, setNewReason] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -152,28 +206,6 @@ export default function SettingsClient() {
     setJobTypes(
       jobTypes.map((t) => (t.tag === tag ? { ...t, [field]: v } : t)),
     );
-  }
-
-  function addVarianceCause() {
-    const v = newCause.trim();
-    if (!v || varianceCauses.includes(v)) return;
-    setVarianceCauses([...varianceCauses, v]);
-    setNewCause('');
-  }
-
-  function removeVarianceCause(c) {
-    setVarianceCauses(varianceCauses.filter((x) => x !== c));
-  }
-
-  function addLossReason() {
-    const v = newReason.trim();
-    if (!v || lossReasons.includes(v)) return;
-    setLossReasons([...lossReasons, v]);
-    setNewReason('');
-  }
-
-  function removeLossReason(c) {
-    setLossReasons(lossReasons.filter((x) => x !== c));
   }
 
   async function save() {
@@ -368,89 +400,27 @@ export default function SettingsClient() {
             </div>
           </section>
 
-          <section className="mb-5 rounded-lg border border-pm-border bg-pm-surface p-5">
-            <div className="mb-1 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
-              Variance causes
-            </div>
-            <p className="mb-3 text-[12px] text-pm-text-3">
-              Reasons why a Completed job's actual margin came in below estimated. Surfaced as a picker on negative-variance Completed jobs in the QMT.
-            </p>
+          <EditableList
+            title="Variance causes"
+            description="Reasons why a Completed job's actual margin came in below estimated. Surfaced as a picker on negative-variance Completed jobs in the QMT."
+            items={varianceCauses}
+            placeholder="New variance cause"
+            onAdd={(v) => {
+              if (!varianceCauses.includes(v)) setVarianceCauses([...varianceCauses, v]);
+            }}
+            onRemove={(c) => setVarianceCauses(varianceCauses.filter((x) => x !== c))}
+          />
 
-            <div className="flex flex-col gap-1.5">
-              {varianceCauses.map((c) => (
-                <div key={c} className="flex items-center gap-2 rounded-md border border-pm-border bg-pm-bg px-3 py-2">
-                  <span className="flex-1 text-[13px] text-pm-text">{c}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeVarianceCause(c)}
-                    className="rounded border border-pm-border-2 px-2 py-1 text-[11px] text-pm-text-3 hover:border-pm-red hover:text-pm-red"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-pm-border pt-3">
-              <input
-                type="text"
-                placeholder="New variance cause"
-                value={newCause}
-                onChange={(e) => setNewCause(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addVarianceCause())}
-                className="flex-1 min-w-[180px] rounded border border-pm-border-2 bg-pm-surface px-2 py-1.5 text-[13px] text-pm-text outline-none focus:border-pm-orange"
-              />
-              <button
-                type="button"
-                onClick={addVarianceCause}
-                className="rounded-md bg-pm-orange px-4 py-1.5 text-[13px] font-medium text-white hover:bg-pm-orange-hover"
-              >
-                Add
-              </button>
-            </div>
-          </section>
-
-          <section className="mb-5 rounded-lg border border-pm-border bg-pm-surface p-5">
-            <div className="mb-1 font-condensed text-[12px] font-bold uppercase tracking-[0.1em] text-pm-orange">
-              Loss reasons
-            </div>
-            <p className="mb-3 text-[12px] text-pm-text-3">
-              Why customers don't proceed with a quoted job. Surfaced as a picker on Unsuccessful jobs in the QMT.
-            </p>
-
-            <div className="flex flex-col gap-1.5">
-              {lossReasons.map((c) => (
-                <div key={c} className="flex items-center gap-2 rounded-md border border-pm-border bg-pm-bg px-3 py-2">
-                  <span className="flex-1 text-[13px] text-pm-text">{c}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeLossReason(c)}
-                    className="rounded border border-pm-border-2 px-2 py-1 text-[11px] text-pm-text-3 hover:border-pm-red hover:text-pm-red"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-pm-border pt-3">
-              <input
-                type="text"
-                placeholder="New loss reason"
-                value={newReason}
-                onChange={(e) => setNewReason(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addLossReason())}
-                className="flex-1 min-w-[180px] rounded border border-pm-border-2 bg-pm-surface px-2 py-1.5 text-[13px] text-pm-text outline-none focus:border-pm-orange"
-              />
-              <button
-                type="button"
-                onClick={addLossReason}
-                className="rounded-md bg-pm-orange px-4 py-1.5 text-[13px] font-medium text-white hover:bg-pm-orange-hover"
-              >
-                Add
-              </button>
-            </div>
-          </section>
+          <EditableList
+            title="Loss reasons"
+            description="Why customers don't proceed with a quoted job. Surfaced as a picker on Unsuccessful jobs in the QMT."
+            items={lossReasons}
+            placeholder="New loss reason"
+            onAdd={(v) => {
+              if (!lossReasons.includes(v)) setLossReasons([...lossReasons, v]);
+            }}
+            onRemove={(c) => setLossReasons(lossReasons.filter((x) => x !== c))}
+          />
 
           <div className="sticky bottom-0 -mx-4 sm:-mx-8 border-t border-pm-border bg-pm-bg/95 px-4 sm:px-8 py-3 backdrop-blur">
             <div className="flex items-center justify-between gap-3">

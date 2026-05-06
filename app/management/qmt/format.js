@@ -105,6 +105,27 @@ export function getTarget(data, jobType, kind) {
   return keys.fallback;
 }
 
+// Build the human-readable caption shown above the Summary Analysis,
+// describing what filters and scope are currently in effect.
+export function buildFilterCaption({ data, filter, range, testMode, count, excludedCount }) {
+  const parts = [];
+  if (testMode) parts.push('Test mode (*_test)');
+  parts.push(`${count} job${count === 1 ? '' : 's'}`);
+  if (excludedCount > 0 && !filter.excludedOnly) parts.push(`${excludedCount} excluded`);
+  if (filter.excludedOnly) parts.push('Excluded only');
+  if (filter.statuses.length > 0) parts.push(filter.statuses.join(', '));
+  if (filter.jobTypes.length > 0) {
+    const labels = filter.jobTypes.map(
+      (tag) => data?.jobTypes?.find((t) => t.tag === tag)?.label || tag,
+    );
+    parts.push(labels.join(', '));
+  }
+  if (filter.search) parts.push(`"${filter.search}"`);
+  if (range.all) parts.push('All time');
+  else if (range.from || range.to) parts.push(`${range.from || '…'} → ${range.to || '…'}`);
+  return parts.join(' · ');
+}
+
 // Which reason list a job needs (if any). Negative-variance Completed →
 // variance cause. Unsuccessful → loss reason. Otherwise: not applicable.
 export function reasonContextFor(job) {

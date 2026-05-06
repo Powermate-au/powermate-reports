@@ -1,23 +1,6 @@
 'use client';
 
-const NEUTRAL_TEXT = new Set([
-  '',
-  'none',
-  'n/a',
-  'na',
-  'nothing',
-  'nothing — all clear',
-  'nothing - all clear',
-  'nothing all clear',
-  'none identified this week',
-  'none received today',
-  'none due this week',
-]);
-
-function isNeutral(v) {
-  if (v === undefined || v === null) return true;
-  return NEUTRAL_TEXT.has(v.toString().toLowerCase().trim());
-}
+import { isNeutralText as isNeutral } from '@/lib/neutral-text';
 
 function ynNorm(v) {
   if (!v) return null;

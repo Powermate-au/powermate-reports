@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { STAFF } from '@/lib/questions';
 import { ymd } from '@/lib/dates';
+import { isNeutralText } from '@/lib/neutral-text';
 import StaffPanel from './StaffPanel';
 
 function parseAuTimestamp(s) {
@@ -23,21 +24,9 @@ function rowToObject(headers, row) {
   return obj;
 }
 
-const NEUTRAL_HELP = new Set([
-  '',
-  'none',
-  'n/a',
-  'na',
-  'nothing',
-  'nothing — all clear',
-  'nothing - all clear',
-  'nothing all clear',
-]);
-
-function helpIsNeutral(v) {
-  if (!v) return true;
-  return NEUTRAL_HELP.has(v.toString().toLowerCase().trim());
-}
+// helpIsNeutral is just the shared neutral-text check — kept as a local alias
+// to keep the existing call sites readable.
+const helpIsNeutral = isNeutralText;
 
 function formatLongDate(yyyymmdd) {
   const [y, m, d] = yyyymmdd.split('-').map(Number);

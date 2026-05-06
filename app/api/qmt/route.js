@@ -6,6 +6,7 @@ import {
   summariseByStatus,
   summariseByJobType,
   topLevelKpis,
+  statusDateFor,
 } from '@/lib/qmt-calc';
 import {
   DEFAULT_JOB_TYPES,
@@ -186,8 +187,8 @@ export async function GET(request) {
     let filteredJobs = jobs;
     if (!all && (from || to)) {
       filteredJobs = jobs.filter((j) => {
-        const dStr = j.date || j.quote_date || '';
-        if (!dStr || dStr.startsWith('0000')) return false;
+        const dStr = statusDateFor(j);
+        if (!dStr) return false;
         const d = new Date(dStr.replace(' ', 'T'));
         if (from && d < from) return false;
         if (to && d > to) return false;
